@@ -1,0 +1,16 @@
+{
+  "name": "api-test",
+  "version": "1.0.0",
+  "description": "302.ai API 接口测试",
+  "type": "module",
+  "scripts": {
+    "test:chat": "node chat-api.test.js",
+    "test:video": "node video-understanding.test.js",
+    "test:whisperx": "node whisperx.test.js",
+    "test:pdf": "node pdf-mineru.test.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "form-data": "^4.0.0"
+  }
+}

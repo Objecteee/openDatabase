@@ -1,0 +1,42 @@
+---
+alwaysApply: true
+---
+
+# Omni-Knowledge Base: Elite Full-Stack Rules
+
+## 1. 核心技术栈 (Modern Tech Stack 2026)
+- **Frontend**: React 19 (Strict Mode), Vite, Tailwind CSS v4+, shadcn/ui.
+- **State/Data**: Zustand (State), Axios (Request), TanStack Query (Server State).
+- **On-Device AI**: Transformers.js v3 (WebGPU/WebGL), Web Workers.
+- **Backend/DB**: Node.js Express, Supabase (pgvector, Auth, Storage).
+
+## 2. 性能与并发防御 (Performance & Concurrency)
+- **单例模式 (Singleton)**: 所有端侧模型加载必须封装在单例类中，严禁在组件生命周期内重复实例化.
+- **计算离线化**: MD5 哈希计算、文本切片 (Chunking)、向量 Embedding 必须在独立的 Web Worker 中运行，不得阻塞主线程 (Main Thread).
+- **上传调度**: 实现并发控制 (Concurrent Limit: 6)，支持断点续传逻辑，大文件必须进行分片处理.
+- **渲染优化**: SSE 打字机效果必须结合 requestAnimationFrame，针对长对话强制开启虚拟列表渲染.
+
+## 3. 移动端与工程化适配 (Engineering & Adaptation)
+- **rem2px 自动化**: 
+  - 基准：1rem = 75px (基于 750px 视觉稿).
+  - 严禁在 CSS/Tailwind 中使用绝对 px（除 1px 边框外），所有布局必须支持等比例缩放.
+- **双 Token 拦截**: 
+  - 实现 Axios 响应拦截器，捕获 401 状态码.
+  - 必须包含请求队列 (Request Queue) 和并发锁，确保刷新 Token 期间不发生冗余请求.
+
+## 4. 全模态数据与溯源逻辑 (Multi-modal & RAG)
+- **全格式支持**: 处理流程必须兼容文本、PDF、Word、图片、音频及视频.
+- **元数据保障**: 存储时必须包含 Metadata（大小、类型、哈希、上传时间、AI 摘要）.
+- **溯源引用 (Citation)**: 
+  - AI 回复必须携带源指针 `[source_id, pointer]`.
+  - pointer 需精确到 PDF 页码或视频时间戳 (hh:mm:ss).
+
+## 5. Superpowers 方法论集成 (AI Collaboration)
+- **前置设计**: 任何复杂模块开发前，强制触发 `skill-brainstorming` 产出方案.
+- **规格驱动**: 编码前必须通过 `skill-writing-plans` 生成任务清单并同步至 `TODO.md`.
+- **系统调试**: 优先使用 `skill-systematic-debugging` 追踪根因，禁止盲目尝试代码.
+- **闭环验证**: 任务完成前必须调用 `skill-verification-before-completion` 检查 rem 适配、单例状态及内存泄露.
+
+## 6. 国际化 (i18n)
+- **自动化流**: 严禁在 UI 层硬编码中文，必须使用 `t('key')`.
+- **翻译脚本**: 编写脚本监听 `zh.json`，自动调用 Gemini API 补全英/日语言包.
