@@ -32,8 +32,23 @@ Supabase 控制台 → **Project Settings** → **API**：
 ### 2. 后端 .env 增加
 
 ```
-SUPABASE_URL=https://xxxx.supabase.co
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_KEY=<service_role 密钥>
+```
+
+**示例**（project-ref 从 `db.xxx.supabase.co` 的 `xxx` 获取）：
+```
+SUPABASE_URL=https://lrehdsqwbbsvlkheuyeo.supabase.co
 SUPABASE_SERVICE_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+**直连 PostgreSQL**（psql / 迁移工具用）：
+```
+host: db.lrehdsqwbbsvlkheuyeo.supabase.co
+port: 5432
+database: postgres
+user: postgres
+password: <创建项目时设置的数据库密码>
 ```
 
 ---

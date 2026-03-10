@@ -12,6 +12,13 @@ export interface ChunkInsert {
   chunk_index: number;
 }
 
+/** 删除文档下所有 chunks（用于重新处理前清空） */
+export async function deleteChunksByDocumentId(documentId: string) {
+  if (!supabase) throw new Error("Supabase 未配置");
+  const { error } = await supabase.from("chunks").delete().eq("document_id", documentId);
+  if (error) throw error;
+}
+
 export async function insertChunks(chunks: ChunkInsert[]) {
   if (!supabase) throw new Error("Supabase 未配置");
   const rows = chunks.map((c) => ({

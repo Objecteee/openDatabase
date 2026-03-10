@@ -2,7 +2,7 @@
  * 文件上传区域：拖拽/选择 → Web Worker MD5 → 秒传或分片上传
  */
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { UploadState } from "../hooks/useFileUpload";
 
 interface UploadZoneProps {
@@ -14,6 +14,7 @@ interface UploadZoneProps {
 
 export function UploadZone({ state, onUpload, onReset, disabled }: UploadZoneProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleFiles = (files: FileList | null) => {
     if (!files?.length || disabled) return;
@@ -34,7 +35,23 @@ export function UploadZone({ state, onUpload, onReset, disabled }: UploadZonePro
   const progress = state.phase === "hashing" ? (state.hashProgress ?? 0) * 100 : state.progress * 100;
 
   return (
-    <div className="rounded-xl border-2 border-dashed border-slate-300 bg-slate-50/50 p-6 transition-colors hover:border-indigo-400">
+    <div
+      className={`rounded-xl border-2 border-dashed p-6 transition-colors ${
+        isDragging && !disabled ? "border-indigo-500 bg-indigo-50/50" : "border-slate-300 bg-slate-50/50 hover:border-indigo-400"
+      }`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (!disabled) setIsDragging(true);
+      }}
+      onDragLeave={() => setIsDragging(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+        handleFiles(e.dataTransfer.files);
+      }}
+    >
       <input
         ref={inputRef}
         type="file"
@@ -45,21 +62,6 @@ export function UploadZone({ state, onUpload, onReset, disabled }: UploadZonePro
       <div
         className="cursor-pointer text-center"
         onClick={() => !disabled && inputRef.current?.click()}
-        onDragOver={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          if (disabled) return;
-          e.currentTarget.classList.add("border-indigo-500", "bg-indigo-50/50");
-        }}
-        onDragLeave={(e) => {
-          e.currentTarget.classList.remove("border-indigo-500", "bg-indigo-50/50");
-        }}
-        onDrop={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          e.currentTarget.classList.remove("border-indigo-500", "bg-indigo-50/50");
-          handleFiles(e.dataTransfer.files);
-        }}
       >
         <p className="text-slate-600">{phaseText[state.phase] || state.phase}</p>
         {(state.phase === "hashing" || state.phase === "uploading") && (

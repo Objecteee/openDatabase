@@ -4,13 +4,17 @@
  */
 
 import SparkMD5 from "spark-md5";
-
-const CHUNK_SIZE = 2 * 1024 * 1024; // 2MB per read
+import { CHUNK_SIZE } from "../constants/upload.js";
 
 self.onmessage = (e: MessageEvent<{ file: File }>) => {
   const { file } = e.data;
   if (!file || !(file instanceof File)) {
     self.postMessage({ error: "Invalid file" });
+    return;
+  }
+  if (file.size === 0) {
+    const spark = new SparkMD5.ArrayBuffer();
+    self.postMessage({ hash: spark.end(), done: true });
     return;
   }
 

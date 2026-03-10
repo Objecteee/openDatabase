@@ -37,16 +37,17 @@ export async function getDocumentById(id: string) {
   return data;
 }
 
+/** 按 hash 查找已存在文档（排除 failed），用于秒传 */
 export async function findByHash(hash: string) {
   if (!supabase) throw new Error("Supabase 未配置");
   const { data, error } = await supabase
     .from("documents")
     .select("id, storage_path")
     .eq("hash", hash)
-    .eq("status", "completed")
+    .in("status", ["pending", "processing", "completed"])
     .limit(1)
-    .single();
-  if (error && error.code !== "PGRST116") throw error;
+    .maybeSingle();
+  if (error) throw error;
   return data;
 }
 
@@ -65,5 +66,15 @@ export async function updateDocumentStatus(
       updated_at: new Date().toISOString(),
     })
     .eq("id", id);
+  if (error) throw error;
+}
+
+export async function deleteDocument(id: string) {
+  if (!supabase) throw new Error("Supabase 未配置");
+  const doc = await getDocumentById(id);
+  if (doc?.storage_path) {
+    await supabase.storage.from("documents").remove([doc.storage_path]);
+  }
+  const { error } = await supabase.from("documents").delete().eq("id", id);
   if (error) throw error;
 }
