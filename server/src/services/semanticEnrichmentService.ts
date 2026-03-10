@@ -7,10 +7,10 @@ import { callDeepSeek } from "./deepseekService.js";
 
 // 每次 DeepSeek 请求处理的 chunk 数量
 // 每个 chunk 输出约 100 token，5个 = 500 token，加上 system prompt 仍在 max_tokens=1024 以内
-const BATCH_SIZE = 5;
+const BATCH_SIZE = 20;
 
 // 批次间并发数（每批已合并多个 chunk，并发不需要太高）
-const BATCH_CONCURRENCY = 2;
+const BATCH_CONCURRENCY = 20;
 
 // ─── Prompt ─────────────────────────────────────────────────────────
 

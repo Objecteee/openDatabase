@@ -1,49 +1,106 @@
 /**
- * Chat 对话路由 - SSE 流式输出
+ * Chat 对话路由 - RAG 增强 + SSE 流式输出
+ *
+ * 请求体：
+ *   messages:       ChatMessage[]   完整对话历史
+ *   queryEmbedding: number[]        前端已计算好的查询向量（384维）
+ *                                   若不传，退化为纯对话模式
+ *
+ * SSE 事件格式：
+ *   data: <OpenAI delta JSON>       流式 token（标准格式）
+ *   data: {"type":"citations","chunks":[...]}  引用来源（在流开始前发送）
+ *   data: [DONE]                    结束标记
  */
 
 import { Router, Request, Response } from "express";
 import { createChatStream, type ChatMessage } from "../services/aiProvider.js";
+import { buildRagContext, buildRagSystemPrompt, type RagChunk } from "../services/ragService.js";
 
 const router = Router();
 
 router.post("/chat", async (req: Request, res: Response) => {
-  const { messages } = req.body as { messages?: ChatMessage[] };
+  const { messages, queryEmbedding } = req.body as {
+    messages?: ChatMessage[];
+    queryEmbedding?: number[];
+  };
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     res.status(400).json({ error: "messages 为必填项，且不能为空数组" });
     return;
   }
 
-  const systemPrompt: ChatMessage = {
-    role: "system",
-    content:
-      "你是一个有帮助的助手。请始终使用 Markdown 格式回复，包括标题、列表、代码块、加粗、链接等，以便更好地呈现内容。",
-  };
+  // ── 提前设置 SSE 响应头 ──────────────────────────────────────────
+  res.setHeader("Content-Type", "text/event-stream");
+  res.setHeader("Cache-Control", "no-cache");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no");
+  res.flushHeaders();
 
-  const messagesWithSystem = [systemPrompt, ...messages];
+  function sendEvent(data: unknown) {
+    res.write(`data: ${JSON.stringify(data)}\n\n`);
+    if (typeof (res as unknown as { flush?: () => void }).flush === "function") {
+      (res as unknown as { flush: () => void }).flush();
+    }
+  }
 
   try {
+    // ── Step 1-3: RAG 流程（仅当前端传入查询向量时执行）────────────
+    let ragChunks: RagChunk[] = [];
+    let systemPrompt: string;
+
+    if (Array.isArray(queryEmbedding) && queryEmbedding.length === 384) {
+      try {
+        const ragContext = await buildRagContext(messages, queryEmbedding);
+
+        if (ragContext.type === "rag" && ragContext.chunks.length > 0) {
+          ragChunks = ragContext.chunks;
+
+          // 在流式 token 之前先发送引用来源事件，前端可立即渲染来源卡片
+          sendEvent({
+            type: "citations",
+            chunks: ragChunks.map((c) => ({
+              id: c.id,
+              document_id: c.document_id,
+              content: c.content.slice(0, 200),
+              metadata: c.metadata,
+            })),
+          });
+        }
+
+        systemPrompt = buildRagSystemPrompt(ragChunks);
+      } catch (ragErr) {
+        // RAG 流程失败，降级为纯对话，不中断响应
+        console.error("[RAG] 流程失败，降级为纯对话:", ragErr);
+        systemPrompt = "你是一个有帮助的助手。请始终使用 Markdown 格式回复。";
+      }
+    } else {
+      // 未传入向量，纯对话模式
+      systemPrompt = "你是一个有帮助的助手。请始终使用 Markdown 格式回复。";
+    }
+
+    // ── 调用 AI 生成回答 ─────────────────────────────────────────────
+    const messagesWithSystem: ChatMessage[] = [
+      { role: "system", content: systemPrompt },
+      ...messages,
+    ];
+
     const streamRes = await createChatStream(messagesWithSystem);
 
     if (!streamRes.ok) {
       const text = await streamRes.text();
-      res.status(streamRes.status).json({ error: text || "AI 服务请求失败" });
+      sendEvent({ type: "error", error: text || "AI 服务请求失败" });
+      res.end();
       return;
     }
 
     const stream = streamRes.body;
     if (!stream) {
-      res.status(500).json({ error: "无法获取响应流" });
+      sendEvent({ type: "error", error: "无法获取响应流" });
+      res.end();
       return;
     }
 
-    res.setHeader("Content-Type", "text/event-stream");
-    res.setHeader("Cache-Control", "no-cache");
-    res.setHeader("Connection", "keep-alive");
-    res.setHeader("X-Accel-Buffering", "no");
-    res.flushHeaders();
-
+    // ── 转发 SSE 流 ──────────────────────────────────────────────────
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
@@ -62,14 +119,15 @@ router.post("/chat", async (req: Request, res: Response) => {
             const data = line.slice(6);
             if (data === "[DONE]") continue;
             res.write(`data: ${data}\n\n`);
-            if (typeof (res as any).flush === "function") {
-              (res as any).flush();
+            if (typeof (res as unknown as { flush?: () => void }).flush === "function") {
+              (res as unknown as { flush: () => void }).flush();
             }
           }
         }
       }
-      if (buffer.trim()) {
-        if (buffer.startsWith("data: ")) res.write(buffer + "\n\n");
+
+      if (buffer.trim() && buffer.startsWith("data: ")) {
+        res.write(buffer + "\n\n");
       }
     } finally {
       reader.releaseLock();
@@ -80,9 +138,10 @@ router.post("/chat", async (req: Request, res: Response) => {
   } catch (e) {
     console.error("Chat stream error:", e);
     if (!res.headersSent) {
-      res.status(500).json({
-        error: e instanceof Error ? e.message : "服务器内部错误",
-      });
+      res.status(500).json({ error: e instanceof Error ? e.message : "服务器内部错误" });
+    } else {
+      sendEvent({ type: "error", error: e instanceof Error ? e.message : "服务器内部错误" });
+      res.end();
     }
   }
 });

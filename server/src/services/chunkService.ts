@@ -81,14 +81,23 @@ export async function insertMultiVectorChunks(chunks: MultiVectorChunkInsert[]) 
   if (error) throw error;
 }
 
+export interface ChunkSearchResult {
+  id: string;
+  document_id: string;
+  content: string;
+  metadata: Record<string, unknown>;
+  similarity?: number;
+}
+
 /**
  * 向量检索，返回最相似的 chunks
  * 需先在 Supabase 创建 match_chunks 函数（见 SUPABASE_SETUP.md）
+ * 只检索 enriched_main 向量（语义最丰富，避免 qa_hypothetical 重复召回同一 chunk）
  */
 export async function searchChunks(
   embedding: number[],
   options?: { limit?: number }
-) {
+): Promise<ChunkSearchResult[]> {
   if (!supabase) throw new Error("Supabase 未配置");
   const limit = options?.limit ?? 5;
 
@@ -98,5 +107,37 @@ export async function searchChunks(
   });
 
   if (error) throw error;
-  return (data ?? []) as { id: string; document_id: string; content: string; metadata: Record<string, unknown> }[];
+  return (data ?? []) as ChunkSearchResult[];
+}
+
+/**
+ * 关键词元数据过滤检索
+ * 在 chunks 表的 metadata->keywords 字段中匹配任意关键词
+ * 利用预处理阶段 DeepSeek 提取的 keywords 实现模拟全文检索
+ */
+export async function searchChunksByKeywords(
+  keywords: string[],
+  options?: { limit?: number }
+): Promise<ChunkSearchResult[]> {
+  if (!supabase) throw new Error("Supabase 未配置");
+  if (keywords.length === 0) return [];
+
+  const limit = options?.limit ?? 5;
+
+  // 只在 enriched_main 向量行中搜索，避免重复
+  // metadata->keywords 是 jsonb 数组，用 ?| 操作符匹配任意关键词
+  const { data, error } = await supabase
+    .from("chunks")
+    .select("id, document_id, content, metadata")
+    .eq("vector_type", "enriched_main")
+    .or(keywords.map((kw) => `metadata->keywords.cs.["${kw}"]`).join(","))
+    .limit(limit);
+
+  if (error) {
+    // 关键词检索失败不影响主流程，静默返回空
+    console.warn("[ChunkService] 关键词检索失败:", error.message);
+    return [];
+  }
+
+  return (data ?? []) as ChunkSearchResult[];
 }
