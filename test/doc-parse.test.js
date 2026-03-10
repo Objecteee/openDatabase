@@ -148,12 +148,6 @@ async function run() {
 
   const hasContent = typeof text === "string" && text.trim().length > 0;
   if (hasContent) {
-    if (process.env.SAVE_OUTPUT) {
-      const outPath = path.join(process.cwd(), process.env.SAVE_OUTPUT);
-      fs.mkdirSync(path.dirname(outPath), { recursive: true });
-      fs.writeFileSync(outPath, text, "utf-8");
-      console.log("\n解析结果已保存至:", outPath);
-    }
     console.log("\n✅ 测试通过");
     process.exit(0);
   } else {

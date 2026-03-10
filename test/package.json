@@ -6,12 +6,12 @@
   "scripts": {
     "test:chat": "node chat-api.test.js",
     "test:video": "node video-understanding.test.js",
+    "test:ark-video": "node ark-video-understanding.test.js",
     "test:whisperx": "node whisperx.test.js",
     "test:pdf": "node pdf-mineru.test.js",
     "test:doc-parse": "node doc-parse.test.js",
-    "test:doc-parse:complex": "node scripts/generate-sample-pdf.js && node doc-parse.test.js samples/complex-sample.pdf",
-    "test:doc-parse:chinese": "node scripts/download-chinese-pdf.js && node doc-parse.test.js samples/hsk-syllabus.pdf",
-    "test:doc-parse:chinese:eval": "node scripts/download-chinese-pdf.js && SAVE_OUTPUT=samples/hsk-parse-output.txt node doc-parse.test.js samples/hsk-syllabus.pdf"
+    "test:mistral-ocr": "node mistral-ocr.test.js",
+    "test:doc-parse:complex": "node scripts/generate-sample-pdf.js && node doc-parse.test.js samples/complex-sample.pdf"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

@@ -17,6 +17,10 @@ npm run test:chat
 # 视频理解 API 测试（异步提交 + 轮询结果）
 npm run test:video
 
+# 方舟视频理解 API 测试（支持时间戳+文本，适合 RAG 溯源）
+npm run test:ark-video
+# 需配置 ARK_API_KEY，指定视频：ARK_VIDEO_URL=https://xxx.mp4 node ark-video-understanding.test.js
+
 # WhisperX 语音转文字测试（带时间戳）
 npm run test:whisperx
 
@@ -27,10 +31,11 @@ npm run test:pdf
 npm run test:doc-parse
 # 复杂文档测试：生成多页 PDF 并解析
 npm run test:doc-parse:complex
-# 复杂中文 PDF（HSK 大纲：多页、表格、中文）
-npm run test:doc-parse:chinese
-# 解析并保存结果：SAVE_OUTPUT=samples/out.txt node doc-parse.test.js ./file.pdf
 # 或指定本地文件：node doc-parse.test.js ./your-file.pdf
+
+# Mistral OCR API 测试（PDF 解析为 Markdown，0.002 PTC/页）
+npm run test:mistral-ocr
+# 使用 AI_API_KEY + AI_BASE_URL，指定 PDF：MISTRAL_PDF_URL=https://xxx.pdf node mistral-ocr.test.js
 ```
 
 **WhisperX 说明**：必须传入音频 base64 编码。
