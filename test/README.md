@@ -22,6 +22,15 @@ npm run test:whisperx
 
 # MinerU PDF 解析 API 测试（创建任务）
 npm run test:pdf
+
+# Sophnet 文档识别 API 测试（PDF/Word 文字提取）
+npm run test:doc-parse
+# 复杂文档测试：生成多页 PDF 并解析
+npm run test:doc-parse:complex
+# 复杂中文 PDF（HSK 大纲：多页、表格、中文）
+npm run test:doc-parse:chinese
+# 解析并保存结果：SAVE_OUTPUT=samples/out.txt node doc-parse.test.js ./file.pdf
+# 或指定本地文件：node doc-parse.test.js ./your-file.pdf
 ```
 
 **WhisperX 说明**：必须传入音频 base64 编码。
