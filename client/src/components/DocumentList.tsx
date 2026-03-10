@@ -55,9 +55,10 @@ function formatDate(iso: string): string {
 
 interface DocumentListProps {
   refreshTrigger?: number;
+  embeddingReady?: boolean;
 }
 
-export function DocumentList({ refreshTrigger = 0 }: DocumentListProps) {
+export function DocumentList({ refreshTrigger = 0, embeddingReady = false }: DocumentListProps) {
   const [docs, setDocs] = useState<Document[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -182,10 +183,11 @@ export function DocumentList({ refreshTrigger = 0 }: DocumentListProps) {
                       <button
                         type="button"
                         onClick={() => handleVectorize(doc.id)}
-                        disabled={!!vectorizingId}
+                        disabled={!!vectorizingId || !embeddingReady}
+                        title={!embeddingReady ? "向量化模型加载中，请稍候" : undefined}
                         className="mr-3 text-indigo-600 hover:underline disabled:opacity-50"
                       >
-                        {vectorizingId === doc.id ? "向量化中…" : "向量化"}
+                        {vectorizingId === doc.id ? "向量化中…" : embeddingReady ? "向量化" : "向量化(加载中)"}
                       </button>
                     )}
                     <button

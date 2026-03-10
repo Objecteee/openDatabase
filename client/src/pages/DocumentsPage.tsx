@@ -1,63 +1,125 @@
 /**
  * 文档库页：上传 + 列表
- * Embedding 模型在 Web Worker 中单例加载，初始化完成前禁止上传
- * 模型加载完成后内容才展示，进度条最少展示 800ms 避免闪灭
+ * 向量化模型加载完成前不进入主内容，全屏显示加载进度条
  */
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useEmbeddingModel } from "../hooks/useEmbeddingModel.js";
 import { useMultiFileUpload } from "../hooks/useMultiFileUpload.js";
 import { MultiFileUploadZone } from "../components/MultiFileUploadZone.js";
 import { DocumentList } from "../components/DocumentList.js";
 
+const INITIALIZING_DELAY_MS = 2000;
+const TIMEOUT_MS = 60_000;
+const PHASE_CHECK_INTERVAL_MS = 1000;
+
+type LoadPhase = "downloading" | "initializing" | "timeout";
+
 export function DocumentsPage() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-  const { isReady, isError, progress, currentFile, error, showContent } = useEmbeddingModel();
+  const { isReady, isError, progress, currentFile, error, retry } = useEmbeddingModel();
   const { items, addFiles, removeItem, clearCompleted } = useMultiFileUpload(() => {
     setRefreshTrigger((t) => t + 1);
   });
+  const [phase, setPhase] = useState<LoadPhase>("downloading");
+  const highProgressSinceRef = useRef<number | null>(null);
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
 
-  return (
-    <div className="flex flex-1 flex-col min-h-0 relative">
-      {!showContent && !isError && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white">
-          <p className="text-slate-600 mb-4">
-            {isReady ? "准备就绪…" : "正在加载向量化模型…"}
-          </p>
-          <div className="w-64 h-2 rounded-full bg-slate-200 overflow-hidden">
+  // 阶段检测：用 setInterval 轮询，通过 ref 读取最新 progress 避免频繁重建 effect
+  useEffect(() => {
+    if (isReady || isError) return;
+
+    function checkPhase() {
+      if (progressRef.current >= 0.99) {
+        if (highProgressSinceRef.current === null) highProgressSinceRef.current = Date.now();
+        const elapsed = Date.now() - highProgressSinceRef.current;
+        if (elapsed >= TIMEOUT_MS) setPhase("timeout");
+        else if (elapsed >= INITIALIZING_DELAY_MS) setPhase("initializing");
+      } else {
+        highProgressSinceRef.current = null;
+        setPhase("downloading");
+      }
+    }
+
+    checkPhase();
+    const id = setInterval(checkPhase, PHASE_CHECK_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [isReady, isError]);
+
+  // 模型加载中
+  if (!isReady && !isError) {
+    const statusText =
+      phase === "timeout"
+        ? "加载超时，请重试或检查网络"
+        : phase === "initializing"
+          ? "正在初始化模型，请稍候…"
+          : currentFile || "首次使用需下载约 100MB，请耐心等待";
+
+    return (
+      <div className="flex flex-1 flex-col min-h-0 items-center justify-center bg-slate-50 px-6">
+        <div className="w-full max-w-md">
+          <h2 className="text-lg font-medium text-slate-700 mb-2">向量化模型加载中</h2>
+          <p className="text-sm text-slate-500 mb-4">{statusText}</p>
+          <div className="h-2 rounded-full bg-slate-200 overflow-hidden">
             <div
-              className="h-full bg-indigo-500 transition-all duration-500"
-              style={{ width: `${(isReady ? 1 : progress) * 100}%` }}
+              className="h-full bg-indigo-500 transition-all duration-300"
+              style={{ width: `${Math.round(progress * 100)}%` }}
             />
           </div>
-          <p className="text-xs text-slate-400 mt-2">
-            {isReady ? "即将进入" : currentFile ? `正在加载 ${currentFile}…` : "首次加载约需下载 100MB，已缓存供后续使用"}
+          <p className="mt-2 text-xs text-slate-400">
+            {phase === "timeout" ? "超时" : `${Math.round(progress * 100)}%`}
           </p>
+          {phase === "timeout" && (
+            <button
+              type="button"
+              onClick={retry}
+              className="mt-4 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700"
+            >
+              重新加载
+            </button>
+          )}
         </div>
-      )}
-      {isError && (
-        <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white">
-          <p className="text-red-600 mb-2">模型加载失败</p>
-          <p className="text-sm text-slate-600">{error}</p>
-        </div>
-      )}
-      {showContent && (
-        <>
-          <section className="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-4">
-            <MultiFileUploadZone
-              items={items}
-              onAddFiles={addFiles}
-              onRemoveItem={removeItem}
-              onClearCompleted={clearCompleted}
-              disabled={!isReady}
-            />
-          </section>
+      </div>
+    );
+  }
 
-          <main className="flex-1 overflow-y-auto p-4">
-            <DocumentList refreshTrigger={refreshTrigger} />
-          </main>
-        </>
-      )}
+  // 模型加载失败
+  if (isError) {
+    return (
+      <div className="flex flex-1 flex-col min-h-0 items-center justify-center bg-slate-50 px-6">
+        <div className="max-w-md text-center">
+          <h2 className="text-lg font-medium text-red-600 mb-2">向量化模型加载失败</h2>
+          <p className="text-sm text-slate-600 mb-4">{error ?? "未知错误"}</p>
+          <button
+            type="button"
+            onClick={retry}
+            className="mt-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700"
+          >
+            重试
+          </button>
+          <p className="mt-3 text-xs text-slate-500">若多次失败，请检查网络连接后刷新页面。</p>
+        </div>
+      </div>
+    );
+  }
+
+  // 模型已就绪
+  return (
+    <div className="flex flex-1 flex-col min-h-0">
+      <section className="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-4">
+        <MultiFileUploadZone
+          items={items}
+          onAddFiles={addFiles}
+          onRemoveItem={removeItem}
+          onClearCompleted={clearCompleted}
+          disabled={false}
+        />
+      </section>
+
+      <main className="flex-1 overflow-y-auto p-4">
+        <DocumentList refreshTrigger={refreshTrigger} embeddingReady={true} />
+      </main>
     </div>
   );
 }

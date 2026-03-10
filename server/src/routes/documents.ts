@@ -8,7 +8,7 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 import { createDocument, deleteDocument, findByHash, getDocumentById, updateDocumentStatus } from "../services/documentService.js";
-import { insertChunks, deleteChunksByDocumentId } from "../services/chunkService.js";
+import { insertMultiVectorChunks, deleteChunksByDocumentId } from "../services/chunkService.js";
 import { parseDocument } from "../services/parseService.js";
 import { supabase } from "../lib/supabase.js";
 import { CHUNK_SIZE, SMALL_FILE_THRESHOLD } from "../constants/upload.js";
@@ -279,7 +279,7 @@ router.get("/:id/parse", async (req: Request, res: Response) => {
 
     await updateDocumentStatus(id, "processing");
     const { chunks } = await parseDocument(id, doc.storage_path, doc.type);
-    res.json({ chunks });
+    res.json({ chunks, document_id: id, document_type: doc.type });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "解析失败";
     try {
@@ -291,33 +291,56 @@ router.get("/:id/parse", async (req: Request, res: Response) => {
   }
 });
 
-// 提交向量化后的 chunks
+// 提交向量化后的 chunks（支持单 ID 多向量：enriched_main + qa_hypothetical x2）
 // POST /api/documents/:id/chunks
 router.post("/:id/chunks", async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { chunks } = req.body as { chunks?: Array<{ chunk_index: number; content: string; metadata?: Record<string, unknown>; embedding: number[] }> };
+  const { chunks } = req.body as {
+    chunks?: Array<{
+      chunk_index: number;
+      content: string;
+      metadata?: Record<string, unknown>;
+      chunk_group_id: string;
+      embeddings: Array<{ type: "enriched_main" | "qa_hypothetical"; embedding: number[] }>;
+    }>;
+  };
   if (!Array.isArray(chunks) || chunks.length === 0)
     return res.status(400).json({ error: "chunks 必填且须为非空数组" });
+
   const EMBEDDING_DIM = 384;
-  const invalid = chunks.find((c) => !Array.isArray(c.embedding) || c.embedding.length !== EMBEDDING_DIM);
-  if (invalid) return res.status(400).json({ error: `embedding 须为 ${EMBEDDING_DIM} 维向量` });
+  for (const c of chunks) {
+    if (!c.chunk_group_id || typeof c.chunk_group_id !== "string")
+      return res.status(400).json({ error: "chunk_group_id 必填" });
+    if (!Array.isArray(c.embeddings) || c.embeddings.length < 3)
+      return res.status(400).json({ error: "每逻辑切片需 3 个向量：enriched_main + 2 qa_hypothetical" });
+    const hasEnriched = c.embeddings.some((e) => e.type === "enriched_main");
+    const hydeCount = c.embeddings.filter((e) => e.type === "qa_hypothetical").length;
+    if (!hasEnriched || hydeCount < 2)
+      return res.status(400).json({ error: "embeddings 须含 1 个 enriched_main 和 2 个 qa_hypothetical" });
+    for (const e of c.embeddings) {
+      if (!Array.isArray(e.embedding) || e.embedding.length !== EMBEDDING_DIM)
+        return res.status(400).json({ error: `embedding 须为 ${EMBEDDING_DIM} 维向量` });
+    }
+  }
 
   try {
     const doc = await getDocumentById(id);
     if (!doc) return res.status(404).json({ error: "文档不存在" });
 
     await deleteChunksByDocumentId(id);
-    await insertChunks(
+    await insertMultiVectorChunks(
       chunks.map((c) => ({
         document_id: id,
+        chunk_group_id: c.chunk_group_id,
         content: String(c.content),
-        embedding: Array.isArray(c.embedding) ? c.embedding : [],
-        metadata: c.metadata ?? {},
+        metadata: { ...(c.metadata ?? {}), document_type: doc.type },
         chunk_index: Number(c.chunk_index),
+        embeddings: c.embeddings.map((e) => ({ type: e.type, embedding: e.embedding })),
       }))
     );
+    const totalRows = chunks.length * 3;
     await updateDocumentStatus(id, "completed");
-    res.json({ ok: true, count: chunks.length });
+    res.json({ ok: true, count: chunks.length, total_vectors: totalRows });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "写入失败";
     try {

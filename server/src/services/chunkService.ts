@@ -1,5 +1,6 @@
 /**
  * chunks 表操作（含向量检索）
+ * 支持单 ID 多向量：enriched_main + qa_hypothetical x2
  */
 
 import { supabase } from "../lib/supabase.js";
@@ -10,6 +11,21 @@ export interface ChunkInsert {
   embedding: number[];
   metadata?: Record<string, unknown>;
   chunk_index: number;
+  chunk_group_id?: string;
+  vector_type?: "enriched_main" | "qa_hypothetical";
+}
+
+/** 多向量插入：同一逻辑切片 3 条记录 */
+export interface MultiVectorChunkInsert {
+  document_id: string;
+  chunk_group_id: string;
+  content: string;
+  metadata?: Record<string, unknown>;
+  chunk_index: number;
+  embeddings: Array<{
+    type: "enriched_main" | "qa_hypothetical";
+    embedding: number[];
+  }>;
 }
 
 /** 删除文档下所有 chunks（用于重新处理前清空） */
@@ -27,7 +43,40 @@ export async function insertChunks(chunks: ChunkInsert[]) {
     embedding: c.embedding,
     metadata: c.metadata ?? {},
     chunk_index: c.chunk_index,
+    chunk_group_id: c.chunk_group_id ?? null,
+    vector_type: c.vector_type ?? "enriched_main",
   }));
+  const { error } = await supabase.from("chunks").insert(rows);
+  if (error) throw error;
+}
+
+/** 插入多向量 chunks（1 enriched_main + 2 qa_hypothetical 每逻辑切片） */
+export async function insertMultiVectorChunks(chunks: MultiVectorChunkInsert[]) {
+  if (!supabase) throw new Error("Supabase 未配置");
+  const rows: Array<{
+    document_id: string;
+    chunk_group_id: string;
+    content: string;
+    metadata: Record<string, unknown>;
+    chunk_index: number;
+    embedding: number[];
+    vector_type: string;
+  }> = [];
+
+  for (const c of chunks) {
+    for (const e of c.embeddings) {
+      rows.push({
+        document_id: c.document_id,
+        chunk_group_id: c.chunk_group_id,
+        content: c.content,
+        metadata: c.metadata ?? {},
+        chunk_index: c.chunk_index,
+        embedding: e.embedding,
+        vector_type: e.type,
+      });
+    }
+  }
+
   const { error } = await supabase.from("chunks").insert(rows);
   if (error) throw error;
 }
