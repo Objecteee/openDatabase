@@ -236,20 +236,25 @@ export async function buildRagContext(
 ): Promise<RagContext> {
   // Step 1：意图分类 + 查询重写
   const intent = await analyzeIntent(messages);
+  console.log(`[RAG] Step1 意图分析: type=${intent.type}, query="${intent.rewrittenQuery}", keywords=${JSON.stringify(intent.keywords)}`);
 
   if (intent.type === "chat") {
+    console.log("[RAG] 判断为闲聊，跳过检索");
     return { type: "chat", chunks: [] };
   }
 
   // Step 2：混合检索
   const candidates = await hybridSearch(queryEmbedding, intent.keywords);
+  console.log(`[RAG] Step2 混合检索: 召回 ${candidates.length} 个候选 chunk`);
 
   if (candidates.length === 0) {
+    console.log("[RAG] 检索结果为空，知识库中无相关内容");
     return { type: "rag", chunks: [], rewrittenQuery: intent.rewrittenQuery };
   }
 
   // Step 3：精排
   const finalChunks = await rerankChunks(intent.rewrittenQuery, candidates);
+  console.log(`[RAG] Step3 精排完成: 保留 ${finalChunks.length} 个 chunk`);
 
   return {
     type: "rag",

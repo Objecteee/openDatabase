@@ -274,8 +274,8 @@ router.get("/:id/parse", async (req: Request, res: Response) => {
   try {
     const doc = await getDocumentById(id);
     if (!doc) return res.status(404).json({ error: "文档不存在" });
-    if (!["txt", "md"].includes(doc.type))
-      return res.status(400).json({ error: `暂不支持类型 ${doc.type}，仅支持 txt、md` });
+    if (!["txt", "md", "pdf"].includes(doc.type))
+      return res.status(400).json({ error: `暂不支持类型 ${doc.type}，仅支持 txt、md、pdf` });
 
     await updateDocumentStatus(id, "processing");
     const { chunks } = await parseDocument(id, doc.storage_path, doc.type);

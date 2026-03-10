@@ -1,11 +1,13 @@
 /**
  * 文档解析：从 Storage 下载并按类型解析为文本切片
  * txt/md：智能切片 (DeepSeek) + 语义增强 (DeepSeek)
+ * pdf：Mistral OCR → Markdown → 智能切片 (DeepSeek) + 语义增强 (DeepSeek)
  */
 
 import { supabase } from "../lib/supabase.js";
 import { smartChunkWithDeepSeek } from "../parsers/smartChunkingParser.js";
 import { enrichChunks } from "./semanticEnrichmentService.js";
+import { parsePdfWithMistralOcr } from "../parsers/mistralOcrParser.js";
 
 export interface EnrichedChunk {
   content: string;
@@ -27,27 +29,44 @@ export async function parseDocument(documentId: string, storagePath: string, typ
   const { data, error } = await supabase.storage.from("documents").download(storagePath);
   if (error || !data) throw new Error(error?.message ?? "下载文件失败");
 
-  const text = await data.text();
-  if (!text || !text.trim()) throw new Error("文件内容为空");
-
   switch (type) {
     case "txt":
     case "md": {
-      const smartChunks = await smartChunkWithDeepSeek(text, documentId, type);
-      const chunks = await enrichChunks(smartChunks);
-      return {
-        chunks: chunks.map((c) => ({
-          content: c.content,
-          chunk_index: c.chunk_index,
-          metadata: {},
-          summary: c.summary,
-          keywords: c.keywords,
-          hypothetical_questions: c.hypothetical_questions,
-        })),
-        text,
-      };
+      const text = await data.text();
+      if (!text || !text.trim()) throw new Error("文件内容为空");
+      return parseMarkdownText(text, documentId, type);
+    }
+    case "pdf": {
+      const arrayBuffer = await data.arrayBuffer();
+      const pdfBuffer = Buffer.from(arrayBuffer);
+
+      console.log(`[parseDocument] 开始 Mistral OCR 解析 PDF，大小: ${pdfBuffer.length} bytes`);
+      const ocrResult = await parsePdfWithMistralOcr(pdfBuffer, true);
+      const mdText = ocrResult.fullMarkdown;
+      console.log(`[parseDocument] OCR 完成，共 ${ocrResult.pages.length} 页，Markdown 长度: ${mdText.length}`);
+
+      if (!mdText || !mdText.trim()) throw new Error("PDF OCR 结果为空");
+
+      // 将 OCR 得到的 Markdown 当作 md 类型走智能切片 + 语义增强
+      return parseMarkdownText(mdText, documentId, "md");
     }
     default:
       throw new Error(`暂不支持的类型: ${type}`);
   }
+}
+
+async function parseMarkdownText(text: string, documentId: string, type: string): Promise<ParseResult> {
+  const smartChunks = await smartChunkWithDeepSeek(text, documentId, type);
+  const chunks = await enrichChunks(smartChunks);
+  return {
+    chunks: chunks.map((c) => ({
+      content: c.content,
+      chunk_index: c.chunk_index,
+      metadata: {},
+      summary: c.summary,
+      keywords: c.keywords,
+      hypothetical_questions: c.hypothetical_questions,
+    })),
+    text,
+  };
 }

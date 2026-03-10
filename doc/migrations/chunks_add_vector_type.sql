@@ -17,24 +17,31 @@ ALTER TABLE chunks ADD CONSTRAINT chunks_vector_type_check
 -- 4. 修改 match_chunks：需先 DROP（返回类型变更不支持 REPLACE）
 DROP FUNCTION IF EXISTS match_chunks(vector(384), integer);
 
--- 新建 match_chunks：按 chunk_group_id 去重，返回每组合并后的 content/metadata
+-- 新建 match_chunks：按 chunk_group_id 去重，只检索 enriched_main 向量
+-- 注意：CTE 内列名加 c 前缀（如 cid/cdocument_id），避免与 RETURNS TABLE 声明的同名列产生歧义
+--      （PostgreSQL plpgsql 中 RETURNS TABLE 的列名会作为变量存在于函数作用域）
 CREATE FUNCTION match_chunks(query_embedding vector(384), match_count int DEFAULT 5)
 RETURNS TABLE (id uuid, document_id uuid, content text, metadata jsonb, chunk_group_id uuid)
 LANGUAGE plpgsql AS $$
 BEGIN
   RETURN QUERY
   WITH scored AS (
-    SELECT c.id, c.document_id, c.content, c.metadata, c.chunk_group_id,
+    SELECT c.id        AS cid,
+           c.document_id AS cdocument_id,
+           c.content   AS ccontent,
+           c.metadata  AS cmetadata,
+           c.chunk_group_id AS cchunk_group_id,
            (c.embedding <=> query_embedding) AS dist
     FROM chunks c
+    WHERE c.vector_type = 'enriched_main'
   ),
   best_per_group AS (
-    SELECT DISTINCT ON (COALESCE(chunk_group_id::text, id::text))
-      id, document_id, content, metadata, chunk_group_id, dist
-    FROM scored
-    ORDER BY COALESCE(chunk_group_id::text, id::text), dist
+    SELECT DISTINCT ON (COALESCE(s.cchunk_group_id::text, s.cid::text))
+      s.cid, s.cdocument_id, s.ccontent, s.cmetadata, s.cchunk_group_id, s.dist
+    FROM scored s
+    ORDER BY COALESCE(s.cchunk_group_id::text, s.cid::text), s.dist
   )
-  SELECT b.id, b.document_id, b.content, b.metadata, b.chunk_group_id
+  SELECT b.cid, b.cdocument_id, b.ccontent, b.cmetadata, b.cchunk_group_id
   FROM best_per_group b
   ORDER BY b.dist
   LIMIT match_count;
@@ -54,18 +61,23 @@ LANGUAGE plpgsql AS $$
 BEGIN
   RETURN QUERY
   WITH filtered AS (
-    SELECT c.id, c.document_id, c.content, c.metadata, c.chunk_group_id,
+    SELECT c.id        AS cid,
+           c.document_id AS cdocument_id,
+           c.content   AS ccontent,
+           c.metadata  AS cmetadata,
+           c.chunk_group_id AS cchunk_group_id,
            (c.embedding <=> query_embedding) AS dist
     FROM chunks c
-    WHERE (filter_document_ids IS NULL OR c.document_id = ANY(filter_document_ids))
+    WHERE c.vector_type = 'enriched_main'
+      AND (filter_document_ids IS NULL OR c.document_id = ANY(filter_document_ids))
   ),
   best_per_group AS (
-    SELECT DISTINCT ON (COALESCE(chunk_group_id::text, id::text))
-      id, document_id, content, metadata, chunk_group_id, dist
-    FROM filtered
-    ORDER BY COALESCE(chunk_group_id::text, id::text), dist
+    SELECT DISTINCT ON (COALESCE(f.cchunk_group_id::text, f.cid::text))
+      f.cid, f.cdocument_id, f.ccontent, f.cmetadata, f.cchunk_group_id, f.dist
+    FROM filtered f
+    ORDER BY COALESCE(f.cchunk_group_id::text, f.cid::text), f.dist
   )
-  SELECT b.id, b.document_id, b.content, b.metadata, b.chunk_group_id
+  SELECT b.cid, b.cdocument_id, b.ccontent, b.cmetadata, b.cchunk_group_id
   FROM best_per_group b
   ORDER BY b.dist
   LIMIT match_count;

@@ -179,7 +179,7 @@ export function DocumentList({ refreshTrigger = 0, embeddingReady = false }: Doc
                   <td className={`px-4 py-3 ${status.color}`}>{status.label}</td>
                   <td className="px-4 py-3 text-slate-600">{formatDate(doc.created_at)}</td>
                   <td className="px-4 py-3">
-                    {["txt", "md"].includes(doc.type) && doc.status === "pending" && (
+                    {["txt", "md", "pdf"].includes(doc.type) && doc.status === "pending" && (
                       <button
                         type="button"
                         onClick={() => handleVectorize(doc.id)}
