@@ -59,8 +59,14 @@ router.post("/upload", multerUpload.single("file"), async (req: Request, res: Re
   const { hash } = (req.body as Record<string, string>) || {};
   const name = req.file.originalname;
   const ext = (name.split(".").pop() || "").toLowerCase();
-  const typeMap: Record<string, string> = { pdf: "pdf", txt: "txt", md: "md", docx: "docx", mp4: "video", mp3: "audio", wav: "audio", m4a: "audio" };
-  const type = typeMap[ext] || "unknown";
+  const typeMap: Record<string, string> = {
+    pdf: "pdf", txt: "txt", md: "md",
+    docx: "docx", xlsx: "xlsx", xls: "xls", pptx: "pptx",
+    csv: "csv", json: "json", html: "html", xml: "xml",
+    jpg: "jpg", jpeg: "jpeg", png: "png",
+    mp4: "video", mp3: "audio", wav: "audio", m4a: "audio",
+  };
+  const type = typeMap[ext] || ext || "unknown";
   const storage_path = safeStoragePath(name);
 
   if (!supabase) return res.status(500).json({ error: "Supabase 未配置" });
@@ -164,8 +170,14 @@ router.post("/upload/complete/:upload_id", async (req: Request, res: Response) =
   const sessionDir = path.join(tempDir, upload_id);
   const name = overrideName || session.name;
   const ext = (name.split(".").pop() || "").toLowerCase();
-  const typeMap: Record<string, string> = { pdf: "pdf", txt: "txt", md: "md", docx: "docx", mp4: "video", mp3: "audio", wav: "audio", m4a: "audio" };
-  const docType = type || typeMap[ext] || "unknown";
+  const typeMap: Record<string, string> = {
+    pdf: "pdf", txt: "txt", md: "md",
+    docx: "docx", xlsx: "xlsx", xls: "xls", pptx: "pptx",
+    csv: "csv", json: "json", html: "html", xml: "xml",
+    jpg: "jpg", jpeg: "jpeg", png: "png",
+    mp4: "video", mp3: "audio", wav: "audio", m4a: "audio",
+  };
+  const docType = type || typeMap[ext] || ext || "unknown";
   const storage_path = safeStoragePath(name);
 
   if (!supabase) return res.status(500).json({ error: "Supabase 未配置" });
@@ -274,8 +286,8 @@ router.get("/:id/parse", async (req: Request, res: Response) => {
   try {
     const doc = await getDocumentById(id);
     if (!doc) return res.status(404).json({ error: "文档不存在" });
-    if (!["txt", "md", "pdf"].includes(doc.type))
-      return res.status(400).json({ error: `暂不支持类型 ${doc.type}，仅支持 txt、md、pdf` });
+    if (["video", "audio"].includes(doc.type))
+      return res.status(400).json({ error: `类型 ${doc.type} 需通过专用转录接口处理` });
 
     await updateDocumentStatus(id, "processing");
     const { chunks } = await parseDocument(id, doc.storage_path, doc.type);

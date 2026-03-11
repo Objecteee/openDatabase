@@ -11,6 +11,7 @@
     "test:pdf": "node pdf-mineru.test.js",
     "test:doc-parse": "node doc-parse.test.js",
     "test:mistral-ocr": "node mistral-ocr.test.js",
+    "test:markitdown": "node markitdown-docx.test.js",
     "test:doc-parse:complex": "node scripts/generate-sample-pdf.js && node doc-parse.test.js samples/complex-sample.pdf"
   },
   "dependencies": {

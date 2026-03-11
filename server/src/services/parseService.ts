@@ -2,12 +2,14 @@
  * 文档解析：从 Storage 下载并按类型解析为文本切片
  * txt/md：智能切片 (DeepSeek) + 语义增强 (DeepSeek)
  * pdf：Mistral OCR → Markdown → 智能切片 (DeepSeek) + 语义增强 (DeepSeek)
+ * 其他（docx/xlsx/pptx/csv/html/png/jpg 等）：Markitdown API → Markdown → 智能切片 + 语义增强
  */
 
 import { supabase } from "../lib/supabase.js";
 import { smartChunkWithDeepSeek } from "../parsers/smartChunkingParser.js";
 import { enrichChunks } from "./semanticEnrichmentService.js";
 import { parsePdfWithMistralOcr } from "../parsers/mistralOcrParser.js";
+import { convertToMarkdown, getMimeTypeByExt, shouldUseMarkitdown } from "../parsers/markitdownParser.js";
 
 export interface EnrichedChunk {
   content: string;
@@ -47,11 +49,29 @@ export async function parseDocument(documentId: string, storagePath: string, typ
 
       if (!mdText || !mdText.trim()) throw new Error("PDF OCR 结果为空");
 
-      // 将 OCR 得到的 Markdown 当作 md 类型走智能切片 + 语义增强
       return parseMarkdownText(mdText, documentId, "md");
     }
-    default:
-      throw new Error(`暂不支持的类型: ${type}`);
+    default: {
+      if (!shouldUseMarkitdown(type)) {
+        throw new Error(`不支持解析的类型: ${type}（视频/音频需单独处理）`);
+      }
+
+      // 从 storagePath 推断文件名和扩展名
+      const fileName = storagePath.split("/").pop() ?? `file.${type}`;
+      const ext = fileName.split(".").pop() ?? type;
+      const mimeType = getMimeTypeByExt(ext);
+
+      const arrayBuffer = await data.arrayBuffer();
+      const fileBuffer = Buffer.from(arrayBuffer);
+
+      console.log(`[parseDocument] 开始 Markitdown 转换，类型: ${type}，文件: ${fileName}`);
+      const mdText = await convertToMarkdown(fileBuffer, fileName, mimeType);
+      console.log(`[parseDocument] Markitdown 转换完成，Markdown 长度: ${mdText.length}`);
+
+      if (!mdText || !mdText.trim()) throw new Error("Markitdown 转换结果为空");
+
+      return parseMarkdownText(mdText, documentId, "md");
+    }
   }
 }
 
