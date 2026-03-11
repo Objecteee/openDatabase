@@ -8,7 +8,7 @@
   cursor: pointer;
 
   &:focus {
-    border-color: var(--color-brand-600);
+    border-color: var(--color-accent-600);
     outline: none;
     box-shadow: 0 0 0 4px var(--color-focus-ring);
   }

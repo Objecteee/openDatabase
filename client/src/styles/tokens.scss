@@ -39,18 +39,33 @@
 }
 
 :root[data-theme="light"] {
-  /* Brand */
-  --color-brand-600: #4F46E5;
-  --color-brand-700: #4338CA;
-  --color-brand-100: #E0E7FF;
+  /* Primary (main CTA, dark like reference) */
+  --color-primary-bg: #0B1020;
+  --color-primary-bg-hover: #121A33;
+  --color-primary-fg: #EAF0FF;
+
+  /* Accent (neutral, grayscale) */
+  --color-accent-600: rgba(11, 16, 32, 0.78);
+  --color-accent-700: rgba(11, 16, 32, 0.88);
+  --color-accent-100: rgba(11, 16, 32, 0.08);
+  --color-accent-050: rgba(11, 16, 32, 0.05);
+
+  /* Back-compat (older components) */
+  --color-brand-600: var(--color-accent-600);
+  --color-brand-700: var(--color-accent-700);
+  --color-brand-100: var(--color-accent-100);
 
   /* Neutral */
-  --color-bg: #F8FAFC;
+  --color-bg: #F7F8FC;
   --color-surface: #FFFFFF;
-  --color-border: #E2E8F0;
-  --color-text-900: #0F172A;
-  --color-text-600: #475569;
-  --color-text-400: #94A3B8;
+  --color-border: rgba(15, 23, 42, 0.10);
+  --color-text-900: #0B1020;
+  --color-text-600: rgba(11, 16, 32, 0.70);
+  --color-text-400: rgba(11, 16, 32, 0.45);
+
+  /* Background ambience */
+  --bg-gradient: radial-gradient(900px 520px at 72% 22%, rgba(11, 16, 32, 0.06), rgba(247, 248, 252, 0) 62%);
+  --grid-line: rgba(11, 16, 32, 0.035);
 
   /* Semantic */
   --color-danger-600: #DC2626;
@@ -59,23 +74,38 @@
 
   /* Inputs */
   --color-input-bg: #FFFFFF;
-  --color-input-border: #CBD5E1;
-  --color-focus-ring: rgba(79, 70, 229, 0.35);
+  --color-input-border: rgba(11, 16, 32, 0.14);
+  --color-focus-ring: rgba(11, 16, 32, 0.16);
 }
 
 :root[data-theme="dark"] {
-  /* Brand (slightly brighter in dark) */
-  --color-brand-600: #6366F1;
-  --color-brand-700: #4F46E5;
-  --color-brand-100: rgba(99, 102, 241, 0.18);
+  /* Primary */
+  --color-primary-bg: #EAF0FF;
+  --color-primary-bg-hover: #DDE6FF;
+  --color-primary-fg: #0B1020;
+
+  /* Accent (neutral, grayscale) */
+  --color-accent-600: rgba(234, 240, 255, 0.78);
+  --color-accent-700: rgba(234, 240, 255, 0.90);
+  --color-accent-100: rgba(234, 240, 255, 0.10);
+  --color-accent-050: rgba(234, 240, 255, 0.06);
+
+  /* Back-compat */
+  --color-brand-600: var(--color-accent-600);
+  --color-brand-700: var(--color-accent-700);
+  --color-brand-100: var(--color-accent-100);
 
   /* Neutral */
-  --color-bg: #0B1220;
-  --color-surface: #0F172A;
-  --color-border: #1E293B;
-  --color-text-900: #E2E8F0;
-  --color-text-600: #CBD5E1;
-  --color-text-400: #94A3B8;
+  --color-bg: #070A14;
+  --color-surface: #0B1020;
+  --color-border: rgba(234, 240, 255, 0.10);
+  --color-text-900: #EAF0FF;
+  --color-text-600: rgba(234, 240, 255, 0.72);
+  --color-text-400: rgba(234, 240, 255, 0.46);
+
+  /* Background ambience */
+  --bg-gradient: radial-gradient(900px 520px at 72% 22%, rgba(234, 240, 255, 0.08), rgba(7, 10, 20, 0) 62%);
+  --grid-line: rgba(234, 240, 255, 0.04);
 
   /* Semantic */
   --color-danger-600: #F87171;
@@ -84,8 +114,8 @@
 
   /* Inputs */
   --color-input-bg: rgba(226, 232, 240, 0.06);
-  --color-input-border: #334155;
-  --color-focus-ring: rgba(99, 102, 241, 0.35);
+  --color-input-border: rgba(234, 240, 255, 0.14);
+  --color-focus-ring: rgba(234, 240, 255, 0.16);
 
   /* Shadows (reduced; rely more on borders) */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.25);

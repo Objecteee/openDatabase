@@ -32,7 +32,7 @@
   width: 28px;
   height: 28px;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--color-brand-600), var(--color-brand-700));
+  background: linear-gradient(135deg, rgba(11, 16, 32, 0.92), rgba(11, 16, 32, 0.72));
   box-shadow: var(--shadow-sm);
 }
 
@@ -68,8 +68,8 @@
 }
 
 .linkActive {
-  color: var(--color-brand-600);
-  background: var(--color-brand-100);
+  color: var(--color-accent-700);
+  background: var(--color-accent-100);
 }
 
 .right {

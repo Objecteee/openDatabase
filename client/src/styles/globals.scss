@@ -11,7 +11,19 @@ html[data-theme="dark"] {
 
 body {
   font-family: var(--font-sans);
-  background: var(--color-bg);
+  background-color: var(--color-bg);
+  background-image:
+    var(--bg-gradient),
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size:
+    auto,
+    72px 72px,
+    72px 72px;
+  background-position:
+    center,
+    center,
+    center;
   color: var(--color-text-900);
 }
 
@@ -25,6 +37,6 @@ textarea {
 
 /* Selection */
 ::selection {
-  background: var(--color-brand-100);
+  background: rgba(11, 16, 32, 0.12);
 }
 
