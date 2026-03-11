@@ -38,15 +38,17 @@ export async function getDocumentById(id: string) {
 }
 
 /** 按 hash 查找已存在文档（排除 failed），用于秒传 */
-export async function findByHash(hash: string) {
+export async function findByHash(hash: string, userId?: string) {
   if (!supabase) throw new Error("Supabase 未配置");
-  const { data, error } = await supabase
+  let query = supabase
     .from("documents")
     .select("id, storage_path")
     .eq("hash", hash)
     .in("status", ["pending", "processing", "completed"])
     .limit(1)
     .maybeSingle();
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query;
   if (error) throw error;
   return data;
 }

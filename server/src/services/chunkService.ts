@@ -6,6 +6,7 @@
 import { supabase } from "../lib/supabase.js";
 
 export interface ChunkInsert {
+  user_id: string;
   document_id: string;
   content: string;
   embedding: number[];
@@ -17,6 +18,7 @@ export interface ChunkInsert {
 
 /** 多向量插入：同一逻辑切片 3 条记录 */
 export interface MultiVectorChunkInsert {
+  user_id: string;
   document_id: string;
   chunk_group_id: string;
   content: string;
@@ -38,6 +40,7 @@ export async function deleteChunksByDocumentId(documentId: string) {
 export async function insertChunks(chunks: ChunkInsert[]) {
   if (!supabase) throw new Error("Supabase 未配置");
   const rows = chunks.map((c) => ({
+    user_id: c.user_id,
     document_id: c.document_id,
     content: c.content,
     embedding: c.embedding,
@@ -54,6 +57,7 @@ export async function insertChunks(chunks: ChunkInsert[]) {
 export async function insertMultiVectorChunks(chunks: MultiVectorChunkInsert[]) {
   if (!supabase) throw new Error("Supabase 未配置");
   const rows: Array<{
+    user_id: string;
     document_id: string;
     chunk_group_id: string;
     content: string;
@@ -66,6 +70,7 @@ export async function insertMultiVectorChunks(chunks: MultiVectorChunkInsert[]) 
   for (const c of chunks) {
     for (const e of c.embeddings) {
       rows.push({
+        user_id: c.user_id,
         document_id: c.document_id,
         chunk_group_id: c.chunk_group_id,
         content: c.content,
@@ -97,26 +102,20 @@ export interface ChunkSearchResult {
  */
 export async function searchChunks(
   embedding: number[],
-  options?: { limit?: number; documentIds?: string[] }
+  options: { userId: string; limit?: number; documentIds?: string[] }
 ): Promise<ChunkSearchResult[]> {
   if (!supabase) throw new Error("Supabase 未配置");
+  if (!options?.userId) throw new Error("userId 必填");
   const limit = options?.limit ?? 5;
   const docIds = options?.documentIds?.filter((id) => id && /^[0-9a-f-]{36}$/i.test(id));
 
-  if (docIds && docIds.length > 0) {
-    const { data, error } = await supabase.rpc("match_chunks_filtered", {
-      query_embedding: embedding,
-      filter_document_ids: docIds,
-      match_count: limit,
-    });
-    if (error) throw error;
-    return (data ?? []) as ChunkSearchResult[];
-  }
+  const fn = docIds && docIds.length > 0 ? "match_chunks_filtered_scoped" : "match_chunks_scoped";
+  const payload =
+    fn === "match_chunks_filtered_scoped"
+      ? { query_embedding: embedding, scope_user_id: options.userId, filter_document_ids: docIds, match_count: limit }
+      : { query_embedding: embedding, scope_user_id: options.userId, match_count: limit };
 
-  const { data, error } = await supabase.rpc("match_chunks", {
-    query_embedding: embedding,
-    match_count: limit,
-  });
+  const { data, error } = await supabase.rpc(fn, payload);
   if (error) throw error;
   return (data ?? []) as ChunkSearchResult[];
 }
@@ -128,9 +127,10 @@ export async function searchChunks(
  */
 export async function searchChunksByKeywords(
   keywords: string[],
-  options?: { limit?: number; documentIds?: string[] }
+  options: { userId: string; limit?: number; documentIds?: string[] }
 ): Promise<ChunkSearchResult[]> {
   if (!supabase) throw new Error("Supabase 未配置");
+  if (!options?.userId) throw new Error("userId 必填");
   if (keywords.length === 0) return [];
 
   const limit = options?.limit ?? 5;
@@ -140,6 +140,7 @@ export async function searchChunksByKeywords(
     .from("chunks")
     .select("id, document_id, content, metadata")
     .eq("vector_type", "enriched_main")
+    .eq("user_id", options.userId)
     .or(keywords.map((kw) => `metadata->keywords.cs.["${kw}"]`).join(","));
 
   if (docIds && docIds.length > 0) {

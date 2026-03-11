@@ -4,22 +4,24 @@
 
 import { supabase } from "../lib/supabase.js";
 
-export async function createConversation(userId?: string) {
+export async function createConversation(userId: string) {
   if (!supabase) throw new Error("Supabase 未配置");
   const { data, error } = await supabase
     .from("conversations")
-    .insert({ user_id: userId ?? null })
+    .insert({ user_id: userId })
     .select("id")
     .single();
   if (error) throw error;
   return data.id;
 }
 
-export async function getConversationById(id: string): Promise<{ id: string; title: string | null; created_at: string; updated_at: string } | null> {
+export async function getConversationById(
+  id: string,
+): Promise<{ id: string; user_id: string | null; title: string | null; created_at: string; updated_at: string } | null> {
   if (!supabase) throw new Error("Supabase 未配置");
   const { data, error } = await supabase
     .from("conversations")
-    .select("id, title, created_at, updated_at")
+    .select("id, user_id, title, created_at, updated_at")
     .eq("id", id)
     .maybeSingle();
   if (error) throw error;

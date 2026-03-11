@@ -27,10 +27,11 @@ import {
 } from "../services/conversationService.js";
 import { createMessage, getMessagesByConversation } from "../services/messageService.js";
 import { getConversationDocumentIds } from "../services/conversationDocumentsService.js";
+import type { AuthedRequest } from "../middleware/authMiddleware.js";
 
 const router = Router();
 
-router.post("/chat", async (req: Request, res: Response) => {
+router.post("/chat", async (req: AuthedRequest, res: Response) => {
   const { messages, queryEmbedding, conversation_id: bodyConversationId, document_ids: bodyDocumentIds } = req.body as {
     messages?: ChatMessage[];
     queryEmbedding?: number[];
@@ -55,17 +56,22 @@ router.post("/chat", async (req: Request, res: Response) => {
   }
 
   let conversationId: string;
+  const userId = req.user?.id;
+  if (!userId) {
+    res.status(401).json({ error: "未登录" });
+    return;
+  }
 
   try {
     if (bodyConversationId && typeof bodyConversationId === "string") {
       const conv = await getConversationById(bodyConversationId);
-      if (!conv) {
+      if (!conv || conv.user_id !== userId) {
         res.status(404).json({ error: "会话不存在" });
         return;
       }
       conversationId = bodyConversationId;
     } else {
-      conversationId = await createConversation();
+      conversationId = await createConversation(userId);
     }
   } catch (e) {
     console.error("[chat] resolve conversation error:", e);
@@ -97,6 +103,7 @@ router.post("/chat", async (req: Request, res: Response) => {
 
     await createMessage({
       conversation_id: conversationId,
+      user_id: userId,
       role: "user",
       content: lastUserContent,
     });
@@ -120,12 +127,12 @@ router.post("/chat", async (req: Request, res: Response) => {
     const boundDocumentIds =
       explicitDocumentIds && explicitDocumentIds.length > 0
         ? explicitDocumentIds
-        : await getConversationDocumentIds(conversationId).catch(() => []);
+        : await getConversationDocumentIds(conversationId, userId).catch(() => []);
 
     if (Array.isArray(queryEmbedding) && queryEmbedding.length === 384) {
       try {
         const filterIds = boundDocumentIds.length > 0 ? boundDocumentIds : undefined;
-        const ragContext = await buildRagContext(messages, queryEmbedding, filterIds);
+        const ragContext = await buildRagContext(messages, queryEmbedding, userId, filterIds);
 
         if (ragContext.type === "rag" && ragContext.chunks.length > 0) {
           ragChunks = ragContext.chunks;
@@ -221,6 +228,7 @@ router.post("/chat", async (req: Request, res: Response) => {
 
     await createMessage({
       conversation_id: conversationId,
+      user_id: userId,
       role: "assistant",
       content: fullContent.trim() || "(无回复内容)",
       citations: citationsForPersist.length > 0 ? citationsForPersist : undefined,

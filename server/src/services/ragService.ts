@@ -126,10 +126,11 @@ export async function analyzeIntent(
 export async function hybridSearch(
   queryEmbedding: number[],
   keywords: string[],
+  userId: string,
   documentIds?: string[]
 ): Promise<RagChunk[]> {
-  const searchOpts = { limit: VECTOR_RECALL_COUNT, documentIds };
-  const keywordOpts = { limit: KEYWORD_RECALL_COUNT, documentIds };
+  const searchOpts = { userId, limit: VECTOR_RECALL_COUNT, documentIds };
+  const keywordOpts = { userId, limit: KEYWORD_RECALL_COUNT, documentIds };
 
   const [vectorResults, keywordResults] = await Promise.all([
     searchChunks(queryEmbedding, searchOpts),
@@ -239,6 +240,7 @@ export async function rerankChunks(
 export async function buildRagContext(
   messages: ChatMessage[],
   queryEmbedding: number[],
+  userId: string,
   documentIds?: string[]
 ): Promise<RagContext> {
   const intent = await analyzeIntent(messages);
@@ -249,7 +251,7 @@ export async function buildRagContext(
     return { type: "chat", chunks: [] };
   }
 
-  const candidates = await hybridSearch(queryEmbedding, intent.keywords, documentIds);
+  const candidates = await hybridSearch(queryEmbedding, intent.keywords, userId, documentIds);
   console.log(`[RAG] Step2 混合检索: 召回 ${candidates.length} 个候选 chunk`);
 
   if (candidates.length === 0) {

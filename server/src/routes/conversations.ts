@@ -9,7 +9,7 @@
  * DELETE /api/conversations/:id     删除会话（级联删 messages）
  */
 
-import { Router, Request, Response } from "express";
+import { Router, type Request, type Response } from "express";
 import {
   createConversation,
   getConversationById,
@@ -23,6 +23,8 @@ import {
   getConversationDocumentIds,
   removeConversationDocument,
 } from "../services/conversationDocumentsService.js";
+import type { AuthedRequest } from "../middleware/authMiddleware.js";
+import { getDocumentById } from "../services/documentService.js";
 
 const router = Router();
 
@@ -44,9 +46,11 @@ function validateId(req: Request, res: Response, next: () => void) {
 
 // ─── 创建会话 ─────────────────────────────────────────────────────────
 
-router.post("/", async (_req: Request, res: Response) => {
+router.post("/", async (_req: AuthedRequest, res: Response) => {
   try {
-    const id = await createConversation();
+    const userId = _req.user?.id;
+    if (!userId) return res.status(401).json({ error: "未登录" });
+    const id = await createConversation(userId);
     res.status(201).json({ id });
   } catch (e) {
     console.error("[conversations] create error:", e);
@@ -56,9 +60,11 @@ router.post("/", async (_req: Request, res: Response) => {
 
 // ─── 会话列表 ─────────────────────────────────────────────────────────
 
-router.get("/", async (_req: Request, res: Response) => {
+router.get("/", async (_req: AuthedRequest, res: Response) => {
   try {
-    const list = await getConversations(undefined, 50);
+    const userId = _req.user?.id;
+    if (!userId) return res.status(401).json({ error: "未登录" });
+    const list = await getConversations(userId, 50);
     res.json(list);
   } catch (e) {
     console.error("[conversations] list error:", e);
@@ -68,10 +74,11 @@ router.get("/", async (_req: Request, res: Response) => {
 
 // ─── 会话详情（可选，用于前端校验或展示）─────────────────────────────
 
-router.get("/:id", validateId, async (req: Request, res: Response) => {
+router.get("/:id", validateId, async (req: AuthedRequest, res: Response) => {
   try {
     const conv = await getConversationById(req.params.id);
-    if (!conv) {
+    const userId = req.user?.id;
+    if (!userId || !conv || conv.user_id !== userId) {
       res.status(404).json({ error: "会话不存在" });
       return;
     }
@@ -84,11 +91,12 @@ router.get("/:id", validateId, async (req: Request, res: Response) => {
 
 // ─── 会话消息列表 ─────────────────────────────────────────────────────
 
-router.get("/:id/messages", validateId, async (req: Request, res: Response) => {
+router.get("/:id/messages", validateId, async (req: AuthedRequest, res: Response) => {
   try {
     const id = req.params.id;
     const exists = await getConversationById(id);
-    if (!exists) {
+    const userId = req.user?.id;
+    if (!userId || !exists || exists.user_id !== userId) {
       res.status(404).json({ error: "会话不存在" });
       return;
     }
@@ -103,15 +111,16 @@ router.get("/:id/messages", validateId, async (req: Request, res: Response) => {
 // ─── 会话关联文档（conversation_documents）──────────────────────────────
 
 // GET /api/conversations/:id/documents
-router.get("/:id/documents", validateId, async (req: Request, res: Response) => {
+router.get("/:id/documents", validateId, async (req: AuthedRequest, res: Response) => {
   try {
     const id = req.params.id;
     const exists = await getConversationById(id);
-    if (!exists) {
+    const userId = req.user?.id;
+    if (!userId || !exists || exists.user_id !== userId) {
       res.status(404).json({ error: "会话不存在" });
       return;
     }
-    const document_ids = await getConversationDocumentIds(id);
+    const document_ids = await getConversationDocumentIds(id, userId);
     res.json({ document_ids });
   } catch (e) {
     console.error("[conversations] getDocuments error:", e);
@@ -120,7 +129,7 @@ router.get("/:id/documents", validateId, async (req: Request, res: Response) => 
 });
 
 // POST /api/conversations/:id/documents  body: { document_id: string }
-router.post("/:id/documents", validateId, async (req: Request, res: Response) => {
+router.post("/:id/documents", validateId, async (req: AuthedRequest, res: Response) => {
   const { document_id } = req.body as { document_id?: string };
   if (typeof document_id !== "string" || !document_id.trim()) {
     res.status(400).json({ error: "document_id 必填且为字符串" });
@@ -129,12 +138,19 @@ router.post("/:id/documents", validateId, async (req: Request, res: Response) =>
   try {
     const id = req.params.id;
     const exists = await getConversationById(id);
-    if (!exists) {
+    const userId = req.user?.id;
+    if (!userId || !exists || exists.user_id !== userId) {
       res.status(404).json({ error: "会话不存在" });
       return;
     }
-    await addConversationDocument(id, document_id.trim());
-    const document_ids = await getConversationDocumentIds(id);
+    // 校验文档归属当前用户，避免跨租户关联
+    const doc = await getDocumentById(document_id.trim());
+    if (!doc || doc.user_id !== userId) {
+      res.status(404).json({ error: "文档不存在" });
+      return;
+    }
+    await addConversationDocument(id, document_id.trim(), userId);
+    const document_ids = await getConversationDocumentIds(id, userId);
     res.json({ ok: true, document_ids });
   } catch (e) {
     console.error("[conversations] addDocument error:", e);
@@ -143,7 +159,7 @@ router.post("/:id/documents", validateId, async (req: Request, res: Response) =>
 });
 
 // DELETE /api/conversations/:id/documents/:docId
-router.delete("/:id/documents/:docId", validateId, async (req: Request, res: Response) => {
+router.delete("/:id/documents/:docId", validateId, async (req: AuthedRequest, res: Response) => {
   const { docId } = req.params;
   if (!docId || !UUID_REGEX.test(docId)) {
     res.status(400).json({ error: "无效的文档 ID" });
@@ -152,12 +168,13 @@ router.delete("/:id/documents/:docId", validateId, async (req: Request, res: Res
   try {
     const id = req.params.id;
     const exists = await getConversationById(id);
-    if (!exists) {
+    const userId = req.user?.id;
+    if (!userId || !exists || exists.user_id !== userId) {
       res.status(404).json({ error: "会话不存在" });
       return;
     }
-    await removeConversationDocument(id, docId);
-    const document_ids = await getConversationDocumentIds(id);
+    await removeConversationDocument(id, docId, userId);
+    const document_ids = await getConversationDocumentIds(id, userId);
     res.json({ ok: true, document_ids });
   } catch (e) {
     console.error("[conversations] removeDocument error:", e);
@@ -167,7 +184,7 @@ router.delete("/:id/documents/:docId", validateId, async (req: Request, res: Res
 
 // ─── 更新会话标题 ─────────────────────────────────────────────────────
 
-router.patch("/:id", validateId, async (req: Request, res: Response) => {
+router.patch("/:id", validateId, async (req: AuthedRequest, res: Response) => {
   const { title } = req.body as { title?: string };
   if (typeof title !== "string" || !title.trim()) {
     res.status(400).json({ error: "title 必填且为非空字符串" });
@@ -175,7 +192,8 @@ router.patch("/:id", validateId, async (req: Request, res: Response) => {
   }
   try {
     const exists = await getConversationById(req.params.id);
-    if (!exists) {
+    const userId = req.user?.id;
+    if (!userId || !exists || exists.user_id !== userId) {
       res.status(404).json({ error: "会话不存在" });
       return;
     }
@@ -189,10 +207,11 @@ router.patch("/:id", validateId, async (req: Request, res: Response) => {
 
 // ─── 删除会话 ─────────────────────────────────────────────────────────
 
-router.delete("/:id", validateId, async (req: Request, res: Response) => {
+router.delete("/:id", validateId, async (req: AuthedRequest, res: Response) => {
   try {
     const exists = await getConversationById(req.params.id);
-    if (!exists) {
+    const userId = req.user?.id;
+    if (!userId || !exists || exists.user_id !== userId) {
       res.status(404).json({ error: "会话不存在" });
       return;
     }

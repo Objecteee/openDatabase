@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase.js";
 
 export interface MessageInsert {
   conversation_id: string;
+  user_id: string;
   role: "user" | "assistant" | "system";
   content: string;
   citations?: unknown[];
