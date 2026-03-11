@@ -694,16 +694,17 @@ function CitationCard({ index, citation }: CitationCardProps) {
     return buildTimestampUrl(file_url, pointer);
   })();
 
-  const handleOpenSource = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleOpenSource = () => {
     if (jumpUrl) window.open(jumpUrl, "_blank", "noopener,noreferrer");
   };
 
   return (
     <div className={styles.citationCard}>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setExpanded((v) => !v)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setExpanded((v) => !v); } }}
         className={styles.citationHeader}
       >
         <span className={styles.citationIndex}>{index}</span>
@@ -737,7 +738,7 @@ function CitationCard({ index, citation }: CitationCardProps) {
           {jumpUrl && (
             <button
               type="button"
-              onClick={handleOpenSource}
+              onClick={(e) => { e.stopPropagation(); handleOpenSource(); }}
               className={styles.openBtn}
               title={pointer?.startsWith("p.") ? t("chat.citations.open") : t("chat.citations.jump")}
             >
@@ -746,7 +747,7 @@ function CitationCard({ index, citation }: CitationCardProps) {
           )}
           <span className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ""}`}>▾</span>
         </span>
-      </button>
+      </div>
 
       {expanded && (
         <div className={styles.citationBody}>

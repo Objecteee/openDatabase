@@ -6,7 +6,10 @@
       "documents": "Documents",
       "login": "Login",
       "register": "Register",
-      "logout": "Logout"
+      "logout": "Logout",
+      "dashboard": "Dashboard",
+      "menu": "Menu",
+      "closeMenu": "Close menu"
     },
     "common": {
       "loading": "Loading…",
@@ -66,6 +69,57 @@
       "page": "Page {{page}}"
     },
     "confirmDeleteConversation": "Delete this conversation?"
+  },
+  "dashboard": {
+    "title": "Dashboard",
+    "loading": "Loading statistics…",
+    "error": "Failed to load, please retry",
+    "retry": "Retry",
+    "overview": {
+      "title": "Overview",
+      "totalDocuments": "Documents",
+      "vectorized": "Vectorized",
+      "totalConversations": "Conversations",
+      "totalMessages": "Messages",
+      "totalChunks": "Vector Chunks",
+      "storage": "Storage Used"
+    },
+    "docType": {
+      "title": "Document Types"
+    },
+    "docStatus": {
+      "title": "Document Status",
+      "completed": "Vectorized",
+      "processing": "Processing",
+      "pending": "Pending",
+      "failed": "Failed"
+    },
+    "uploadTrend": {
+      "title": "Upload Trend (Last 30 Days)",
+      "yAxis": "Uploads"
+    },
+    "msgTrend": {
+      "title": "Message Trend (Last 30 Days)",
+      "user": "User",
+      "assistant": "Assistant"
+    },
+    "convTrend": {
+      "title": "Conversation Trend (Last 30 Days)",
+      "yAxis": "Conversations"
+    },
+    "msgDistribution": {
+      "title": "Messages per Conversation",
+      "xAxis": "Message Count",
+      "yAxis": "Conversations"
+    },
+    "topChunks": {
+      "title": "Top 10 Documents by Chunks",
+      "xAxis": "Chunks"
+    },
+    "activity": {
+      "title": "Activity Heatmap (Last 60 Days)",
+      "tooltip": "Messages"
+    }
   },
   "documents": {
     "model": {

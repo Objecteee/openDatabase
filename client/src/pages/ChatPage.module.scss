@@ -269,6 +269,8 @@
 }
 
 .bubbleUser {
+  width: fit-content;
+  max-width: min(520px, 72%);
   background: var(--color-primary-bg);
   color: var(--color-primary-fg);
 }

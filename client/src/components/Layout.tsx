@@ -2,7 +2,8 @@
  * 布局：Header 导航 + 子路由
  */
 
-import { Outlet, NavLink, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
+import { Outlet, NavLink, useNavigate, useLocation } from "react-router-dom";
 import { api } from "../lib/apiClient.js";
 import { useAuthStore } from "../stores/authStore.js";
 import { useThemeStore } from "../stores/themeStore.js";
@@ -13,11 +14,31 @@ import styles from "./Layout.module.scss";
 
 export function Layout() {
   const nav = useNavigate();
+  const location = useLocation();
   const user = useAuthStore((s) => s.user);
   const logoutLocal = useAuthStore((s) => s.logoutLocal);
   const theme = useThemeStore((s) => s.theme);
   const toggleTheme = useThemeStore((s) => s.toggleTheme);
   const { t, i18n } = useTranslation();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // 路由变化时关闭菜单
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
+
+  // 点击菜单外部关闭
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [menuOpen]);
 
   const onLogout = async () => {
     try {
@@ -43,24 +64,32 @@ export function Layout() {
             </div>
 
             <div className={styles.links} aria-label="Primary">
-            <NavLink
-              to="/"
-              end
-              className={({ isActive }) =>
-                `${styles.link} ${isActive ? styles.linkActive : ""}`
-              }
-            >
-              {t("app.nav.chat")}
-            </NavLink>
-            <NavLink
-              to="/documents"
-              className={({ isActive }) =>
-                `${styles.link} ${isActive ? styles.linkActive : ""}`
-              }
-            >
-              {t("app.nav.documents")}
-            </NavLink>
-          </div>
+              <NavLink
+                to="/"
+                end
+                className={({ isActive }) =>
+                  `${styles.link} ${isActive ? styles.linkActive : ""}`
+                }
+              >
+                {t("app.nav.chat")}
+              </NavLink>
+              <NavLink
+                to="/documents"
+                className={({ isActive }) =>
+                  `${styles.link} ${isActive ? styles.linkActive : ""}`
+                }
+              >
+                {t("app.nav.documents")}
+              </NavLink>
+              <NavLink
+                to="/dashboard"
+                className={({ isActive }) =>
+                  `${styles.link} ${isActive ? styles.linkActive : ""}`
+                }
+              >
+                {t("app.nav.dashboard")}
+              </NavLink>
+            </div>
           </div>
 
           <div className={styles.right}>
@@ -115,6 +144,62 @@ export function Layout() {
                 </NavLink>
               </div>
             )}
+
+            {/* 汉堡按钮：仅移动端显示 */}
+            <div className={styles.menuWrap} ref={menuRef}>
+              <button
+                type="button"
+                className={`${styles.iconBtn} ${styles.hamburger}`}
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-label={menuOpen ? t("app.nav.closeMenu") : t("app.nav.menu")}
+                aria-expanded={menuOpen}
+              >
+                {menuOpen ? "✕" : "☰"}
+              </button>
+
+              {menuOpen && (
+                <div className={styles.mobileMenu} role="menu">
+                  <NavLink
+                    to="/"
+                    end
+                    role="menuitem"
+                    className={({ isActive }) =>
+                      `${styles.mobileMenuItem} ${isActive ? styles.mobileMenuItemActive : ""}`
+                    }
+                  >
+                    {t("app.nav.chat")}
+                  </NavLink>
+                  <NavLink
+                    to="/documents"
+                    role="menuitem"
+                    className={({ isActive }) =>
+                      `${styles.mobileMenuItem} ${isActive ? styles.mobileMenuItemActive : ""}`
+                    }
+                  >
+                    {t("app.nav.documents")}
+                  </NavLink>
+                  <NavLink
+                    to="/dashboard"
+                    role="menuitem"
+                    className={({ isActive }) =>
+                      `${styles.mobileMenuItem} ${isActive ? styles.mobileMenuItemActive : ""}`
+                    }
+                  >
+                    {t("app.nav.dashboard")}
+                  </NavLink>
+                  {user && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className={styles.mobileMenuItemBtn}
+                      onClick={onLogout}
+                    >
+                      {t("app.nav.logout")}
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </nav>
       </header>

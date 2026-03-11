@@ -6,7 +6,10 @@
       "documents": "ドキュメント",
       "login": "ログイン",
       "register": "登録",
-      "logout": "ログアウト"
+      "logout": "ログアウト",
+      "dashboard": "ダッシュボード",
+      "menu": "メニュー",
+      "closeMenu": "メニューを閉じる"
     },
     "common": {
       "loading": "読み込み中…",
@@ -66,6 +69,57 @@
       "page": "{{page}} ページ"
     },
     "confirmDeleteConversation": "この会話を削除しますか？"
+  },
+  "dashboard": {
+    "title": "ダッシュボード",
+    "loading": "統計データを読み込み中…",
+    "error": "読み込みに失敗しました",
+    "retry": "再試行",
+    "overview": {
+      "title": "概要",
+      "totalDocuments": "ドキュメント数",
+      "vectorized": "ベクトル化済み",
+      "totalConversations": "会話数",
+      "totalMessages": "メッセージ数",
+      "totalChunks": "ベクトルチャンク数",
+      "storage": "ストレージ使用量"
+    },
+    "docType": {
+      "title": "ドキュメントタイプ分布"
+    },
+    "docStatus": {
+      "title": "ドキュメントステータス",
+      "completed": "ベクトル化済み",
+      "processing": "処理中",
+      "pending": "保留中",
+      "failed": "失敗"
+    },
+    "uploadTrend": {
+      "title": "直近30日のアップロード推移",
+      "yAxis": "アップロード数"
+    },
+    "msgTrend": {
+      "title": "直近30日のメッセージ推移",
+      "user": "ユーザー",
+      "assistant": "アシスタント"
+    },
+    "convTrend": {
+      "title": "直近30日の会話作成推移",
+      "yAxis": "会話数"
+    },
+    "msgDistribution": {
+      "title": "会話ごとのメッセージ数分布",
+      "xAxis": "メッセージ数",
+      "yAxis": "会話数"
+    },
+    "topChunks": {
+      "title": "チャンク数 Top10 ドキュメント",
+      "xAxis": "チャンク数"
+    },
+    "activity": {
+      "title": "直近60日のアクティビティヒートマップ",
+      "tooltip": "メッセージ数"
+    }
   },
   "documents": {
     "model": {

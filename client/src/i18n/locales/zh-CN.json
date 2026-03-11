@@ -6,7 +6,10 @@
       "documents": "文档库",
       "login": "登录",
       "register": "注册",
-      "logout": "退出"
+      "logout": "退出",
+      "dashboard": "仪表盘",
+      "menu": "菜单",
+      "closeMenu": "关闭菜单"
     },
     "common": {
       "loading": "加载中…",
@@ -66,6 +69,57 @@
       "page": "第 {{page}} 页"
     },
     "confirmDeleteConversation": "确定删除该会话？"
+  },
+  "dashboard": {
+    "title": "仪表盘",
+    "loading": "加载统计数据…",
+    "error": "加载失败，请重试",
+    "retry": "重试",
+    "overview": {
+      "title": "总览",
+      "totalDocuments": "文档总数",
+      "vectorized": "已向量化",
+      "totalConversations": "会话总数",
+      "totalMessages": "消息总数",
+      "totalChunks": "向量块总数",
+      "storage": "存储用量"
+    },
+    "docType": {
+      "title": "文档类型分布"
+    },
+    "docStatus": {
+      "title": "文档状态分布",
+      "completed": "已向量化",
+      "processing": "处理中",
+      "pending": "待处理",
+      "failed": "失败"
+    },
+    "uploadTrend": {
+      "title": "近 30 天文档上传趋势",
+      "yAxis": "上传数"
+    },
+    "msgTrend": {
+      "title": "近 30 天消息趋势",
+      "user": "用户消息",
+      "assistant": "AI 回复"
+    },
+    "convTrend": {
+      "title": "近 30 天会话创建趋势",
+      "yAxis": "会话数"
+    },
+    "msgDistribution": {
+      "title": "会话消息数分布",
+      "xAxis": "消息数区间",
+      "yAxis": "会话数"
+    },
+    "topChunks": {
+      "title": "向量块 Top 10 文档",
+      "xAxis": "向量块数"
+    },
+    "activity": {
+      "title": "近 60 天活跃度热力图",
+      "tooltip": "消息数"
+    }
   },
   "documents": {
     "model": {

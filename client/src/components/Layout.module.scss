@@ -127,7 +127,74 @@
   overflow: hidden;
 }
 
-/* Responsive: hide links into menu on small screens */
+/* 汉堡菜单容器：PC 端默认隐藏 */
+.menuWrap {
+  position: relative;
+  display: none;
+}
+
+/* 移动端下拉菜单 */
+.mobileMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 160px;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 100;
+  animation: menuFadeIn var(--dur-1) var(--ease-standard);
+}
+
+@keyframes menuFadeIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.mobileMenuItem {
+  display: block;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: var(--color-text-600);
+  transition: background var(--dur-1) var(--ease-standard), color var(--dur-1) var(--ease-standard);
+
+  &:hover {
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--color-text-900);
+  }
+}
+
+.mobileMenuItemActive {
+  color: var(--color-accent-700);
+  background: var(--color-accent-100);
+}
+
+.mobileMenuItemBtn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  font-size: 14px;
+  color: var(--color-text-600);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-standard), color var(--dur-1) var(--ease-standard);
+
+  &:hover {
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--color-text-900);
+  }
+}
+
+/* Responsive: hide links into hamburger menu on small screens */
 @media (max-width: 767px) {
   .brandText {
     display: none;
@@ -139,6 +206,16 @@
 
   .userName {
     display: none;
+  }
+
+  /* 桌面端退出按钮在移动端隐藏（已移入菜单） */
+  .user {
+    display: none;
+  }
+
+  /* 汉堡按钮在移动端显示 */
+  .menuWrap {
+    display: block;
   }
 }
 

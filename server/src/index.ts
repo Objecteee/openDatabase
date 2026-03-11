@@ -11,6 +11,7 @@ import chatRouter from "./routes/chat.js";
 import documentsRouter from "./routes/documents.js";
 import conversationsRouter from "./routes/conversations.js";
 import authRouter from "./routes/auth.js";
+import statsRouter from "./routes/stats.js";
 import { requireAuth } from "./middleware/authMiddleware.js";
 
 const app = express();
@@ -26,6 +27,7 @@ app.use("/api", authRouter);
 app.use("/api", requireAuth, chatRouter);
 app.use("/api/documents", requireAuth, documentsRouter);
 app.use("/api/conversations", requireAuth, conversationsRouter);
+app.use("/api", requireAuth, statsRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "chat-api" });

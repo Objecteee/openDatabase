@@ -12,6 +12,7 @@ import { useTranslation } from "react-i18next";
 
 const ChatPage = lazy(() => import("./pages/ChatPage.js").then((m) => ({ default: m.ChatPage })));
 const DocumentsPage = lazy(() => import("./pages/DocumentsPage.js").then((m) => ({ default: m.DocumentsPage })));
+const DashboardPage = lazy(() => import("./pages/DashboardPage.js").then((m) => ({ default: m.DashboardPage })));
 const LoginPage = lazy(() => import("./pages/LoginPage.js").then((m) => ({ default: m.LoginPage })));
 const RegisterPage = lazy(() => import("./pages/RegisterPage.js").then((m) => ({ default: m.RegisterPage })));
 
@@ -66,6 +67,14 @@ function App() {
               element={
                 <RequireLogin>
                   <DocumentsPage />
+                </RequireLogin>
+              }
+            />
+            <Route
+              path="dashboard"
+              element={
+                <RequireLogin>
+                  <DashboardPage />
                 </RequireLogin>
               }
             />
