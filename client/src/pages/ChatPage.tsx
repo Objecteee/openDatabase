@@ -1,14 +1,11 @@
 /**
- * 对话页 — RAG 增强版
+ * 对话页 — RAG 增强版 + 会话持久化
  *
- * 发送消息时：
- *   1. 用端侧 embedding 模型将用户输入向量化
- *   2. 将向量随消息一起发送给服务端
- *   3. 服务端执行 RAG（意图分类→混合检索→精排），在流式 token 前先发 citations 事件
- *   4. 前端在 AI 回复气泡下方展示引用来源卡片
+ * - 左侧会话列表：新对话、历史会话（标题、时间）、删除
+ * - 右侧消息区：当前会话消息、输入框；发送时带 conversation_id，新对话时由服务端创建并返回
  */
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { embed } from "../lib/embeddingClient.js";
@@ -21,11 +18,8 @@ interface Citation {
   document_id: string;
   content: string;
   metadata: Record<string, unknown>;
-  /** 文档名称（冗余字段，直接从 metadata.document_name 提升） */
   document_name: string | null;
-  /** 溯源指针：PDF 页码（"p.3"）或视频/音频时间戳（"00:01:23"） */
   pointer: string | null;
-  /** 源文件签名 URL，可直接在新标签页打开 */
   file_url: string | null;
 }
 
@@ -37,19 +31,103 @@ interface Message {
   citations?: Citation[];
 }
 
+interface Conversation {
+  id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 const API_BASE = "/api";
+const CONVERSATIONS_API = `${API_BASE}/conversations`;
 
 // ─── 组件 ────────────────────────────────────────────────────────────
 
 export function ChatPage() {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conversationsLoading, setConversationsLoading] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const rafIdRef = useRef<number | null>(null);
   const pendingChunksRef = useRef<string[]>([]);
   const assistantIdRef = useRef<string>("");
+
+  const fetchConversations = useCallback(async () => {
+    setConversationsLoading(true);
+    try {
+      const res = await fetch(CONVERSATIONS_API);
+      if (!res.ok) throw new Error("获取会话列表失败");
+      const data = (await res.json()) as Conversation[];
+      setConversations(data);
+    } catch (e) {
+      console.error("fetchConversations:", e);
+    } finally {
+      setConversationsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchConversations();
+  }, [fetchConversations]);
+
+  const loadConversation = useCallback(async (id: string) => {
+    setCurrentConversationId(id);
+    setError(null);
+    try {
+      const res = await fetch(`${CONVERSATIONS_API}/${id}/messages`);
+      if (!res.ok) throw new Error("加载消息失败");
+      const list = (await res.json()) as Array<{ id: string; role: string; content: string; citations?: Citation[] }>;
+      setMessages(
+        list.map((m) => ({
+          id: m.id,
+          role: m.role as "user" | "assistant",
+          content: m.content,
+          citations: m.citations as Citation[] | undefined,
+        }))
+      );
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "加载失败");
+      setMessages([]);
+    }
+  }, []);
+
+  const handleNewChat = useCallback(() => {
+    setCurrentConversationId(null);
+    setMessages([]);
+    setError(null);
+  }, []);
+
+  const handleDeleteConversation = useCallback(
+    async (id: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      if (!window.confirm("确定删除该会话？")) return;
+      try {
+        const res = await fetch(`${CONVERSATIONS_API}/${id}`, { method: "DELETE" });
+        if (!res.ok) throw new Error("删除失败");
+        if (currentConversationId === id) {
+          setCurrentConversationId(null);
+          setMessages([]);
+        }
+        setConversations((prev) => prev.filter((c) => c.id !== id));
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "删除失败");
+      }
+    },
+    [currentConversationId]
+  );
+
+  const formatConversationDate = (dateStr: string) => {
+    const d = new Date(dateStr);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) {
+      return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+  };
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -119,7 +197,6 @@ export function ChatPage() {
         }
       }
 
-      // ── 发送请求 ────────────────────────────────────────────────────
       const res = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -129,6 +206,7 @@ export function ChatPage() {
             { role: "user" as const, content: text },
           ],
           ...(queryEmbedding ? { queryEmbedding } : {}),
+          ...(currentConversationId ? { conversation_id: currentConversationId } : {}),
         }),
       });
 
@@ -159,7 +237,12 @@ export function ChatPage() {
           try {
             const json = JSON.parse(data);
 
-            // citations 事件：更新引用来源
+            if (json.type === "conversation_id" && typeof json.id === "string") {
+              setCurrentConversationId(json.id);
+              fetchConversations();
+              continue;
+            }
+
             if (json.type === "citations") {
               const citations = json.chunks as Citation[];
               setMessages((prev) =>
@@ -170,7 +253,6 @@ export function ChatPage() {
               continue;
             }
 
-            // error 事件
             if (json.type === "error") {
               throw new Error(json.error);
             }
@@ -207,11 +289,63 @@ export function ChatPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col min-h-0">
-      <main className="flex-1 overflow-y-auto p-4 space-y-4">
-        {messages.length === 0 && (
-          <div className="text-center text-slate-500 py-12">输入消息开始对话</div>
-        )}
+    <div className="flex flex-1 min-h-0">
+      {/* 左侧会话列表 */}
+      <aside className="w-56 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col min-h-0">
+        <div className="p-2 border-b border-slate-100">
+          <button
+            type="button"
+            onClick={handleNewChat}
+            className="w-full px-3 py-2 text-left text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+          >
+            + 新对话
+          </button>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {conversationsLoading ? (
+            <div className="p-3 text-xs text-slate-400">加载中…</div>
+          ) : conversations.length === 0 ? (
+            <div className="p-3 text-xs text-slate-400">暂无会话</div>
+          ) : (
+            <ul className="p-1">
+              {conversations.map((c) => (
+                <li key={c.id}>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => loadConversation(c.id)}
+                    onKeyDown={(e) => e.key === "Enter" && loadConversation(c.id)}
+                    className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-left ${
+                      currentConversationId === c.id ? "bg-indigo-50 text-indigo-700" : "hover:bg-slate-50 text-slate-700"
+                    }`}
+                  >
+                    <span className="flex-1 min-w-0 truncate text-sm" title={c.title ?? "新对话"}>
+                      {c.title?.trim() || "新对话"}
+                    </span>
+                    <span className="flex-shrink-0 text-xs text-slate-400">
+                      {formatConversationDate(c.updated_at)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={(e) => handleDeleteConversation(c.id, e)}
+                      className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-red-500 transition-all"
+                      title="删除"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </aside>
+
+      <div className="flex flex-1 flex-col min-h-0 min-w-0">
+        <main className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.length === 0 && (
+            <div className="text-center text-slate-500 py-12">输入消息开始对话</div>
+          )}
 
         {messages.map((msg) => (
           <div key={msg.id} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
@@ -274,6 +408,7 @@ export function ChatPage() {
           </button>
         </div>
       </form>
+      </div>
     </div>
   );
 }

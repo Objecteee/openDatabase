@@ -1,15 +1,16 @@
 /**
- * Chat 对话路由 - RAG 增强 + SSE 流式输出
+ * Chat 对话路由 - RAG 增强 + SSE 流式输出 + 会话持久化
  *
  * 请求体：
- *   messages:       ChatMessage[]   完整对话历史
- *   queryEmbedding: number[]        前端已计算好的查询向量（384维）
- *                                   若不传，退化为纯对话模式
+ *   messages:         ChatMessage[]   完整对话历史
+ *   queryEmbedding:   number[]        前端已计算好的查询向量（384维），不传则纯对话
+ *   conversation_id:  string?         可选；不传则服务端创建新会话并在首条事件中返回
  *
  * SSE 事件格式：
- *   data: <OpenAI delta JSON>       流式 token（标准格式）
- *   data: {"type":"citations","chunks":[...]}  引用来源（在流开始前发送）
- *   data: [DONE]                    结束标记
+ *   data: {"type":"conversation_id","id":"..."}  仅当未传 conversation_id 时首条发送
+ *   data: {"type":"citations","chunks":[...]}   引用来源（RAG 时在流开始前发送）
+ *   data: <OpenAI delta JSON>                   流式 token
+ *   data: [DONE]                                结束标记
  */
 
 import { Router, Request, Response } from "express";
@@ -17,13 +18,21 @@ import { createChatStream, type ChatMessage } from "../services/aiProvider.js";
 import { buildRagContext, buildRagSystemPrompt, type RagChunk } from "../services/ragService.js";
 import { supabase } from "../lib/supabase.js";
 import { getDocumentById } from "../services/documentService.js";
+import {
+  createConversation,
+  getConversationById,
+  updateConversationTitle,
+  updateConversationUpdatedAt,
+} from "../services/conversationService.js";
+import { createMessage, getMessagesByConversation } from "../services/messageService.js";
 
 const router = Router();
 
 router.post("/chat", async (req: Request, res: Response) => {
-  const { messages, queryEmbedding } = req.body as {
+  const { messages, queryEmbedding, conversation_id: bodyConversationId } = req.body as {
     messages?: ChatMessage[];
     queryEmbedding?: number[];
+    conversation_id?: string;
   };
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -31,7 +40,37 @@ router.post("/chat", async (req: Request, res: Response) => {
     return;
   }
 
-  // ── 提前设置 SSE 响应头 ──────────────────────────────────────────
+  const lastMessage = messages[messages.length - 1];
+  const lastUserContent =
+    lastMessage?.role === "user" && typeof lastMessage.content === "string"
+      ? lastMessage.content
+      : "";
+
+  if (!lastUserContent.trim()) {
+    res.status(400).json({ error: "最后一条消息须为用户消息且内容非空" });
+    return;
+  }
+
+  let conversationId: string;
+
+  try {
+    if (bodyConversationId && typeof bodyConversationId === "string") {
+      const conv = await getConversationById(bodyConversationId);
+      if (!conv) {
+        res.status(404).json({ error: "会话不存在" });
+        return;
+      }
+      conversationId = bodyConversationId;
+    } else {
+      conversationId = await createConversation();
+    }
+  } catch (e) {
+    console.error("[chat] resolve conversation error:", e);
+    res.status(500).json({ error: e instanceof Error ? e.message : "服务器错误" });
+    return;
+  }
+
+  // ── 提前设置 SSE 响应头（此后只能写 SSE 或 end）────────────────────
   res.setHeader("Content-Type", "text/event-stream");
   res.setHeader("Cache-Control", "no-cache");
   res.setHeader("Connection", "keep-alive");
@@ -46,9 +85,29 @@ router.post("/chat", async (req: Request, res: Response) => {
   }
 
   try {
+    if (!bodyConversationId) {
+      sendEvent({ type: "conversation_id", id: conversationId });
+    }
+
+    const existingMessages = await getMessagesByConversation(conversationId);
+    const isFirstMessage = existingMessages.length === 0;
+
+    await createMessage({
+      conversation_id: conversationId,
+      role: "user",
+      content: lastUserContent,
+    });
+
+    if (isFirstMessage) {
+      const title = lastUserContent.trim().slice(0, 50);
+      await updateConversationTitle(conversationId, title || "新对话");
+    }
+
     // ── Step 1-3: RAG 流程（仅当前端传入查询向量时执行）────────────
     let ragChunks: RagChunk[] = [];
     let systemPrompt: string;
+    /** 供流结束后写入 messages 的引用结构（与前端 citations 一致） */
+    let citationsForPersist: unknown[] = [];
 
     if (Array.isArray(queryEmbedding) && queryEmbedding.length === 384) {
       try {
@@ -56,38 +115,30 @@ router.post("/chat", async (req: Request, res: Response) => {
 
         if (ragContext.type === "rag" && ragContext.chunks.length > 0) {
           ragChunks = ragContext.chunks;
-
-          // 为每个 chunk 的来源文档生成签名 URL（1 小时有效），供前端跳转源文件
           const fileUrlMap = await buildFileUrlMap(ragChunks);
 
-          // 在流式 token 之前先发送引用来源事件，前端可立即渲染来源卡片
-          sendEvent({
-            type: "citations",
-            chunks: ragChunks.map((c) => ({
-              id: c.id,
-              document_id: c.document_id,
-              content: c.content.slice(0, 200),
-              metadata: c.metadata,
-              // 从 metadata 中提取溯源字段，方便前端直接读取
-              document_name: (c.metadata?.document_name as string | undefined) ?? null,
-              pointer: (c.metadata?.pointer as string | undefined) ?? null,
-              file_url: fileUrlMap.get(c.document_id) ?? null,
-            })),
-          });
+          citationsForPersist = ragChunks.map((c) => ({
+            id: c.id,
+            document_id: c.document_id,
+            content: c.content.slice(0, 200),
+            metadata: c.metadata,
+            document_name: (c.metadata?.document_name as string | undefined) ?? null,
+            pointer: (c.metadata?.pointer as string | undefined) ?? null,
+            file_url: fileUrlMap.get(c.document_id) ?? null,
+          }));
+
+          sendEvent({ type: "citations", chunks: citationsForPersist });
         }
 
         systemPrompt = buildRagSystemPrompt(ragChunks);
       } catch (ragErr) {
-        // RAG 流程失败，降级为纯对话，不中断响应
         console.error("[RAG] 流程失败，降级为纯对话:", ragErr);
         systemPrompt = "你是一个有帮助的助手。请始终使用 Markdown 格式回复。";
       }
     } else {
-      // 未传入向量，纯对话模式
       systemPrompt = "你是一个有帮助的助手。请始终使用 Markdown 格式回复。";
     }
 
-    // ── 调用 AI 生成回答 ─────────────────────────────────────────────
     const messagesWithSystem: ChatMessage[] = [
       { role: "system", content: systemPrompt },
       ...messages,
@@ -109,10 +160,10 @@ router.post("/chat", async (req: Request, res: Response) => {
       return;
     }
 
-    // ── 转发 SSE 流 ──────────────────────────────────────────────────
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let fullContent = "";
 
     try {
       while (true) {
@@ -127,6 +178,18 @@ router.post("/chat", async (req: Request, res: Response) => {
           if (line.startsWith("data: ")) {
             const data = line.slice(6);
             if (data === "[DONE]") continue;
+
+            const content =
+              (() => {
+                try {
+                  const j = JSON.parse(data) as { choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }> };
+                  return j.choices?.[0]?.delta?.content ?? j.choices?.[0]?.message?.content;
+                } catch {
+                  return undefined;
+                }
+              })();
+            if (typeof content === "string" && content) fullContent += content;
+
             res.write(`data: ${data}\n\n`);
             if (typeof (res as unknown as { flush?: () => void }).flush === "function") {
               (res as unknown as { flush: () => void }).flush();
@@ -141,6 +204,14 @@ router.post("/chat", async (req: Request, res: Response) => {
     } finally {
       reader.releaseLock();
     }
+
+    await createMessage({
+      conversation_id: conversationId,
+      role: "assistant",
+      content: fullContent.trim() || "(无回复内容)",
+      citations: citationsForPersist.length > 0 ? citationsForPersist : undefined,
+    });
+    await updateConversationUpdatedAt(conversationId);
 
     res.write("data: [DONE]\n\n");
     res.end();

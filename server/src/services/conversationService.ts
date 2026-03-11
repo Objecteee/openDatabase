@@ -15,6 +15,17 @@ export async function createConversation(userId?: string) {
   return data.id;
 }
 
+export async function getConversationById(id: string): Promise<{ id: string; title: string | null; created_at: string; updated_at: string } | null> {
+  if (!supabase) throw new Error("Supabase 未配置");
+  const { data, error } = await supabase
+    .from("conversations")
+    .select("id, title, created_at, updated_at")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function getConversations(userId?: string, limit = 20) {
   if (!supabase) throw new Error("Supabase 未配置");
   let query = supabase
@@ -33,6 +44,16 @@ export async function updateConversationTitle(id: string, title: string) {
   const { error } = await supabase
     .from("conversations")
     .update({ title, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw error;
+}
+
+/** 仅刷新会话的 updated_at，用于新消息写入后排序 */
+export async function updateConversationUpdatedAt(id: string) {
+  if (!supabase) throw new Error("Supabase 未配置");
+  const { error } = await supabase
+    .from("conversations")
+    .update({ updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw error;
 }

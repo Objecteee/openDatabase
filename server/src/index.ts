@@ -8,6 +8,7 @@ import express from "express";
 import cors from "cors";
 import chatRouter from "./routes/chat.js";
 import documentsRouter from "./routes/documents.js";
+import conversationsRouter from "./routes/conversations.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -17,6 +18,7 @@ app.use(express.json({ limit: "10mb" }));
 
 app.use("/api", chatRouter);
 app.use("/api/documents", documentsRouter);
+app.use("/api/conversations", conversationsRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "chat-api" });
