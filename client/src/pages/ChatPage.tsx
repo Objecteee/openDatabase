@@ -38,8 +38,16 @@ interface Conversation {
   updated_at: string;
 }
 
+interface DocumentItem {
+  id: string;
+  name: string;
+  type: string;
+  status?: string;
+}
+
 const API_BASE = "/api";
 const CONVERSATIONS_API = `${API_BASE}/conversations`;
+const DOCUMENTS_API = `${API_BASE}/documents`;
 
 // ─── 组件 ────────────────────────────────────────────────────────────
 
@@ -51,6 +59,10 @@ export function ChatPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [conversationsLoading, setConversationsLoading] = useState(true);
+  const [docPickerOpen, setDocPickerOpen] = useState(false);
+  const [allDocuments, setAllDocuments] = useState<DocumentItem[]>([]);
+  const [boundDocumentIds, setBoundDocumentIds] = useState<Set<string>>(new Set());
+  const [docPickerLoading, setDocPickerLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const rafIdRef = useRef<number | null>(null);
   const pendingChunksRef = useRef<string[]>([]);
@@ -93,13 +105,85 @@ export function ChatPage() {
       setError(e instanceof Error ? e.message : "加载失败");
       setMessages([]);
     }
+
+    // 同步加载会话绑定文档（用于默认 RAG 过滤）
+    try {
+      const docsRes = await fetch(`${CONVERSATIONS_API}/${id}/documents`);
+      if (docsRes.ok) {
+        const json = (await docsRes.json()) as { document_ids?: string[] };
+        const ids = Array.isArray(json.document_ids) ? json.document_ids.filter((x) => typeof x === "string") : [];
+        setBoundDocumentIds(new Set(ids));
+      } else {
+        setBoundDocumentIds(new Set());
+      }
+    } catch {
+      setBoundDocumentIds(new Set());
+    }
   }, []);
 
   const handleNewChat = useCallback(() => {
     setCurrentConversationId(null);
     setMessages([]);
     setError(null);
+    setBoundDocumentIds(new Set());
   }, []);
+
+  const openDocPicker = useCallback(async () => {
+    if (!currentConversationId) return;
+    setDocPickerOpen(true);
+    setDocPickerLoading(true);
+    try {
+      const [docsRes, boundRes] = await Promise.all([
+        fetch(DOCUMENTS_API),
+        fetch(`${CONVERSATIONS_API}/${currentConversationId}/documents`),
+      ]);
+      if (docsRes.ok) {
+        const docs = (await docsRes.json()) as DocumentItem[];
+        setAllDocuments(Array.isArray(docs) ? docs : []);
+      }
+      if (boundRes.ok) {
+        const json = (await boundRes.json()) as { document_ids?: string[] };
+        const ids = Array.isArray(json.document_ids) ? json.document_ids.filter((x) => typeof x === "string") : [];
+        setBoundDocumentIds(new Set(ids));
+      }
+    } finally {
+      setDocPickerLoading(false);
+    }
+  }, [currentConversationId]);
+
+  const toggleBoundDocument = useCallback(
+    async (docId: string) => {
+      if (!currentConversationId) return;
+      if (docPickerLoading) return;
+      setDocPickerLoading(true);
+      try {
+        const currentlyBound = boundDocumentIds.has(docId);
+        if (currentlyBound) {
+          const res = await fetch(`${CONVERSATIONS_API}/${currentConversationId}/documents/${docId}`, { method: "DELETE" });
+          if (!res.ok) throw new Error("取消关联失败");
+        } else {
+          const res = await fetch(`${CONVERSATIONS_API}/${currentConversationId}/documents`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ document_id: docId }),
+          });
+          if (!res.ok) throw new Error("关联失败");
+        }
+
+        const boundRes = await fetch(`${CONVERSATIONS_API}/${currentConversationId}/documents`);
+        if (boundRes.ok) {
+          const json = (await boundRes.json()) as { document_ids?: string[] };
+          const ids = Array.isArray(json.document_ids) ? json.document_ids.filter((x) => typeof x === "string") : [];
+          setBoundDocumentIds(new Set(ids));
+        }
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "操作失败");
+      } finally {
+        setDocPickerLoading(false);
+      }
+    },
+    [boundDocumentIds, currentConversationId, docPickerLoading]
+  );
 
   const handleDeleteConversation = useCallback(
     async (id: string, e: React.MouseEvent) => {
@@ -207,6 +291,7 @@ export function ChatPage() {
           ],
           ...(queryEmbedding ? { queryEmbedding } : {}),
           ...(currentConversationId ? { conversation_id: currentConversationId } : {}),
+          // 方案 B：前端不显式传 document_ids；由后端根据会话绑定文档决定过滤范围
         }),
       });
 
@@ -342,6 +427,30 @@ export function ChatPage() {
       </aside>
 
       <div className="flex flex-1 flex-col min-h-0 min-w-0">
+        {/* 会话工具栏：仅在已选中会话时展示 */}
+        <div className="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-2 flex items-center justify-between">
+          <div className="text-sm text-slate-600">
+            {currentConversationId ? (
+              <span>
+                已关联文档：{boundDocumentIds.size} 个
+              </span>
+            ) : (
+              <span>未选择会话（新对话将自动创建会话）</span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={!currentConversationId}
+              onClick={openDocPicker}
+              className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+              title={!currentConversationId ? "请先选择一个会话" : "选择该会话的检索范围文档"}
+            >
+              关联文档
+            </button>
+          </div>
+        </div>
+
         <main className="flex-1 overflow-y-auto p-4 space-y-4">
           {messages.length === 0 && (
             <div className="text-center text-slate-500 py-12">输入消息开始对话</div>
@@ -409,6 +518,71 @@ export function ChatPage() {
         </div>
       </form>
       </div>
+
+      {/* 关联文档弹层 */}
+      {docPickerOpen && currentConversationId && (
+        <div
+          className="fixed inset-0 bg-black/30 flex items-center justify-center p-4"
+          onClick={() => !docPickerLoading && setDocPickerOpen(false)}
+        >
+          <div
+            className="w-full max-w-2xl bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+              <div className="text-sm font-medium text-slate-700">选择该会话的检索文档</div>
+              <button
+                type="button"
+                disabled={docPickerLoading}
+                onClick={() => setDocPickerOpen(false)}
+                className="text-slate-400 hover:text-slate-600 disabled:opacity-50"
+                title="关闭"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="p-4">
+              {docPickerLoading ? (
+                <div className="text-sm text-slate-500">加载中…</div>
+              ) : allDocuments.length === 0 ? (
+                <div className="text-sm text-slate-500">暂无文档，可先去文档库上传并向量化。</div>
+              ) : (
+                <div className="max-h-[55vh] overflow-y-auto border border-slate-200 rounded-lg">
+                  <ul className="divide-y divide-slate-100">
+                    {allDocuments.map((d) => {
+                      const checked = boundDocumentIds.has(d.id);
+                      const disabled = d.status === "failed" || d.status === "processing";
+                      return (
+                        <li key={d.id} className="px-3 py-2 flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            disabled={docPickerLoading || disabled}
+                            onChange={() => toggleBoundDocument(d.id)}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm text-slate-800 truncate" title={d.name}>
+                              {d.name}
+                            </div>
+                            <div className="text-xs text-slate-400">
+                              {d.type}
+                              {d.status ? ` · ${d.status}` : ""}
+                            </div>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+              <div className="mt-3 text-xs text-slate-400">
+                勾选后会立即生效：后续对话将仅在已关联文档中检索；不勾选则默认全库检索。
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

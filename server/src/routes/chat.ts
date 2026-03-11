@@ -5,6 +5,7 @@
  *   messages:         ChatMessage[]   完整对话历史
  *   queryEmbedding:   number[]        前端已计算好的查询向量（384维），不传则纯对话
  *   conversation_id:  string?         可选；不传则服务端创建新会话并在首条事件中返回
+ *   document_ids:     string[]?      可选；RAG 检索时仅在这些文档的 chunks 中搜索
  *
  * SSE 事件格式：
  *   data: {"type":"conversation_id","id":"..."}  仅当未传 conversation_id 时首条发送
@@ -25,14 +26,16 @@ import {
   updateConversationUpdatedAt,
 } from "../services/conversationService.js";
 import { createMessage, getMessagesByConversation } from "../services/messageService.js";
+import { getConversationDocumentIds } from "../services/conversationDocumentsService.js";
 
 const router = Router();
 
 router.post("/chat", async (req: Request, res: Response) => {
-  const { messages, queryEmbedding, conversation_id: bodyConversationId } = req.body as {
+  const { messages, queryEmbedding, conversation_id: bodyConversationId, document_ids: bodyDocumentIds } = req.body as {
     messages?: ChatMessage[];
     queryEmbedding?: number[];
     conversation_id?: string;
+    document_ids?: string[];
   };
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -109,9 +112,20 @@ router.post("/chat", async (req: Request, res: Response) => {
     /** 供流结束后写入 messages 的引用结构（与前端 citations 一致） */
     let citationsForPersist: unknown[] = [];
 
+    const explicitDocumentIds = Array.isArray(bodyDocumentIds)
+      ? bodyDocumentIds.filter((id) => typeof id === "string" && /^[0-9a-f-]{36}$/i.test(id))
+      : undefined;
+
+    // 若前端未显式传 document_ids，则使用会话绑定文档作为默认检索范围
+    const boundDocumentIds =
+      explicitDocumentIds && explicitDocumentIds.length > 0
+        ? explicitDocumentIds
+        : await getConversationDocumentIds(conversationId).catch(() => []);
+
     if (Array.isArray(queryEmbedding) && queryEmbedding.length === 384) {
       try {
-        const ragContext = await buildRagContext(messages, queryEmbedding);
+        const filterIds = boundDocumentIds.length > 0 ? boundDocumentIds : undefined;
+        const ragContext = await buildRagContext(messages, queryEmbedding, filterIds);
 
         if (ragContext.type === "rag" && ragContext.chunks.length > 0) {
           ragChunks = ragContext.chunks;

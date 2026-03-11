@@ -1,5 +1,5 @@
 /**
- * 多文件上传 Hook：队列 + 并发 2
+ * 多文件上传 Hook：队列 + 并发控制（与 main.mdc 规范一致：并发 6）
  */
 
 import { useState, useCallback, useEffect, useRef } from "react";
@@ -17,7 +17,7 @@ export interface UploadItem {
   documentId?: string;
 }
 
-const MAX_CONCURRENT = 2;
+const MAX_CONCURRENT = 6;
 
 /** 单个上传项完成时调用，若上传成功则传入新文档 ID */
 export function useMultiFileUpload(onItemDone?: (documentId?: string) => void) {

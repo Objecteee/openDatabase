@@ -121,15 +121,20 @@ export async function analyzeIntent(
 /**
  * 向量检索 + 关键词过滤，结果合并去重
  * 命中关键词的 chunk 权重提升（score += 0.1 per keyword hit）
+ * @param documentIds 可选；传入时仅在指定文档的 chunks 中检索
  */
 export async function hybridSearch(
   queryEmbedding: number[],
-  keywords: string[]
+  keywords: string[],
+  documentIds?: string[]
 ): Promise<RagChunk[]> {
+  const searchOpts = { limit: VECTOR_RECALL_COUNT, documentIds };
+  const keywordOpts = { limit: KEYWORD_RECALL_COUNT, documentIds };
+
   const [vectorResults, keywordResults] = await Promise.all([
-    searchChunks(queryEmbedding, { limit: VECTOR_RECALL_COUNT }),
+    searchChunks(queryEmbedding, searchOpts),
     keywords.length > 0
-      ? searchChunksByKeywords(keywords, { limit: KEYWORD_RECALL_COUNT })
+      ? searchChunksByKeywords(keywords, keywordOpts)
       : Promise.resolve([]),
   ]);
 
@@ -229,22 +234,22 @@ export async function rerankChunks(
  * 执行完整 RAG 流程，返回上下文信息
  * @param messages 完整对话历史
  * @param queryEmbedding 已向量化的查询向量（由调用方在服务端计算）
+ * @param documentIds 可选；限定只在这些文档的 chunks 中检索
  */
 export async function buildRagContext(
   messages: ChatMessage[],
-  queryEmbedding: number[]
+  queryEmbedding: number[],
+  documentIds?: string[]
 ): Promise<RagContext> {
-  // Step 1：意图分类 + 查询重写
   const intent = await analyzeIntent(messages);
-  console.log(`[RAG] Step1 意图分析: type=${intent.type}, query="${intent.rewrittenQuery}", keywords=${JSON.stringify(intent.keywords)}`);
+  console.log(`[RAG] Step1 意图分析: type=${intent.type}, query="${intent.rewrittenQuery}", keywords=${JSON.stringify(intent.keywords)}${documentIds?.length ? `, documentIds=${documentIds.length}` : ""}`);
 
   if (intent.type === "chat") {
     console.log("[RAG] 判断为闲聊，跳过检索");
     return { type: "chat", chunks: [] };
   }
 
-  // Step 2：混合检索
-  const candidates = await hybridSearch(queryEmbedding, intent.keywords);
+  const candidates = await hybridSearch(queryEmbedding, intent.keywords, documentIds);
   console.log(`[RAG] Step2 混合检索: 召回 ${candidates.length} 个候选 chunk`);
 
   if (candidates.length === 0) {

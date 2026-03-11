@@ -18,6 +18,11 @@ import {
   deleteConversation,
 } from "../services/conversationService.js";
 import { getMessagesByConversation } from "../services/messageService.js";
+import {
+  addConversationDocument,
+  getConversationDocumentIds,
+  removeConversationDocument,
+} from "../services/conversationDocumentsService.js";
 
 const router = Router();
 
@@ -92,6 +97,71 @@ router.get("/:id/messages", validateId, async (req: Request, res: Response) => {
   } catch (e) {
     console.error("[conversations] getMessages error:", e);
     res.status(500).json({ error: e instanceof Error ? e.message : "获取消息失败" });
+  }
+});
+
+// ─── 会话关联文档（conversation_documents）──────────────────────────────
+
+// GET /api/conversations/:id/documents
+router.get("/:id/documents", validateId, async (req: Request, res: Response) => {
+  try {
+    const id = req.params.id;
+    const exists = await getConversationById(id);
+    if (!exists) {
+      res.status(404).json({ error: "会话不存在" });
+      return;
+    }
+    const document_ids = await getConversationDocumentIds(id);
+    res.json({ document_ids });
+  } catch (e) {
+    console.error("[conversations] getDocuments error:", e);
+    res.status(500).json({ error: e instanceof Error ? e.message : "获取关联文档失败" });
+  }
+});
+
+// POST /api/conversations/:id/documents  body: { document_id: string }
+router.post("/:id/documents", validateId, async (req: Request, res: Response) => {
+  const { document_id } = req.body as { document_id?: string };
+  if (typeof document_id !== "string" || !document_id.trim()) {
+    res.status(400).json({ error: "document_id 必填且为字符串" });
+    return;
+  }
+  try {
+    const id = req.params.id;
+    const exists = await getConversationById(id);
+    if (!exists) {
+      res.status(404).json({ error: "会话不存在" });
+      return;
+    }
+    await addConversationDocument(id, document_id.trim());
+    const document_ids = await getConversationDocumentIds(id);
+    res.json({ ok: true, document_ids });
+  } catch (e) {
+    console.error("[conversations] addDocument error:", e);
+    res.status(500).json({ error: e instanceof Error ? e.message : "关联失败" });
+  }
+});
+
+// DELETE /api/conversations/:id/documents/:docId
+router.delete("/:id/documents/:docId", validateId, async (req: Request, res: Response) => {
+  const { docId } = req.params;
+  if (!docId || !UUID_REGEX.test(docId)) {
+    res.status(400).json({ error: "无效的文档 ID" });
+    return;
+  }
+  try {
+    const id = req.params.id;
+    const exists = await getConversationById(id);
+    if (!exists) {
+      res.status(404).json({ error: "会话不存在" });
+      return;
+    }
+    await removeConversationDocument(id, docId);
+    const document_ids = await getConversationDocumentIds(id);
+    res.json({ ok: true, document_ids });
+  } catch (e) {
+    console.error("[conversations] removeDocument error:", e);
+    res.status(500).json({ error: e instanceof Error ? e.message : "取消关联失败" });
   }
 });
 
