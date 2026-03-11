@@ -28,10 +28,26 @@ const typeIcons: Record<string, string> = {
   txt: "📝",
   md: "📝",
   docx: "📄",
+  xlsx: "📊",
+  xls: "📊",
+  pptx: "📊",
+  csv: "📊",
+  json: "📋",
+  html: "🌐",
+  xml: "📋",
+  jpg: "🖼️",
+  jpeg: "🖼️",
+  png: "🖼️",
   video: "🎬",
   audio: "🎵",
   unknown: "📎",
 };
+
+/** 不支持向量化的类型（unknown 等） */
+const NON_VECTORIZABLE = new Set(["unknown"]);
+
+/** 向量化耗时较长的类型，显示额外提示 */
+const SLOW_TYPES = new Set(["video", "audio"]);
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -179,15 +195,25 @@ export function DocumentList({ refreshTrigger = 0, embeddingReady = false }: Doc
                   <td className={`px-4 py-3 ${status.color}`}>{status.label}</td>
                   <td className="px-4 py-3 text-slate-600">{formatDate(doc.created_at)}</td>
                   <td className="px-4 py-3">
-                    {["txt", "md", "pdf"].includes(doc.type) && doc.status === "pending" && (
+                    {!NON_VECTORIZABLE.has(doc.type) && doc.status === "pending" && (
                       <button
                         type="button"
                         onClick={() => handleVectorize(doc.id)}
                         disabled={!!vectorizingId || !embeddingReady}
-                        title={!embeddingReady ? "向量化模型加载中，请稍候" : undefined}
+                        title={
+                          !embeddingReady
+                            ? "向量化模型加载中，请稍候"
+                            : SLOW_TYPES.has(doc.type)
+                              ? `${doc.type === "video" ? "视频理解" : "语音识别"}耗时较长，请耐心等待`
+                              : undefined
+                        }
                         className="mr-3 text-indigo-600 hover:underline disabled:opacity-50"
                       >
-                        {vectorizingId === doc.id ? "向量化中…" : embeddingReady ? "向量化" : "向量化(加载中)"}
+                        {vectorizingId === doc.id
+                          ? "处理中…"
+                          : !embeddingReady
+                            ? "向量化(加载中)"
+                            : "向量化"}
                       </button>
                     )}
                     <button
