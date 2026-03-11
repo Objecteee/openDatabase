@@ -5,6 +5,8 @@
 import { useState, useEffect } from "react";
 import { vectorizeDocument } from "../lib/vectorizeService.js";
 import { useDocumentsStore } from "../stores/documentsStore.js";
+import { useTranslation } from "react-i18next";
+import styles from "./DocumentList.module.scss";
 
 export interface Document {
   id: string;
@@ -15,11 +17,11 @@ export interface Document {
   created_at: string;
 }
 
-const statusMap: Record<string, { label: string; color: string }> = {
-  pending: { label: "待处理", color: "text-amber-600" },
-  processing: { label: "处理中", color: "text-blue-600" },
-  completed: { label: "已完成", color: "text-green-600" },
-  failed: { label: "失败", color: "text-red-600" },
+const statusMap: Record<string, { label: string; tone: "pending" | "processing" | "completed" | "failed" }> = {
+  pending: { label: "待处理", tone: "pending" },
+  processing: { label: "处理中", tone: "processing" },
+  completed: { label: "已完成", tone: "completed" },
+  failed: { label: "失败", tone: "failed" },
 };
 
 const typeIcons: Record<string, string> = {
@@ -54,10 +56,10 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function formatDate(iso: string): string {
+function formatDate(iso: string, locale: string): string {
   try {
     const d = new Date(iso);
-    return d.toLocaleDateString("zh-CN", {
+    return d.toLocaleDateString(locale, {
       month: "2-digit",
       day: "2-digit",
       hour: "2-digit",
@@ -74,6 +76,7 @@ interface DocumentListProps {
 }
 
 export function DocumentList({ refreshTrigger = 0, embeddingReady = false }: DocumentListProps) {
+  const { i18n } = useTranslation();
   const docs = useDocumentsStore((s) => s.docs) as unknown as Document[];
   const loading = useDocumentsStore((s) => s.loading);
   const error = useDocumentsStore((s) => s.error);
@@ -120,63 +123,69 @@ export function DocumentList({ refreshTrigger = 0, embeddingReady = false }: Doc
 
   if (loading && docs.length === 0) {
     return (
-      <div className="py-12 text-center text-slate-500">
-        加载中…
-      </div>
+      <div className={styles.empty}>加载中…</div>
     );
   }
 
   if (error) {
     return (
-      <div className="py-8 text-center text-red-600">
-        {error}
-      </div>
+      <div className={styles.error}>{error}</div>
     );
   }
 
   if (docs.length === 0) {
     return (
-      <div className="py-12 text-center text-slate-500">
-        暂无文档
-      </div>
+      <div className={styles.empty}>暂无文档</div>
     );
   }
 
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white">
-        <table className="w-full text-left text-sm">
+      <div className={styles.wrap}>
+        <table className={styles.table}>
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50">
-              <th className="px-4 py-3 font-medium text-slate-700">名称</th>
-              <th className="px-4 py-3 font-medium text-slate-700">类型</th>
-              <th className="px-4 py-3 font-medium text-slate-700">大小</th>
-              <th className="px-4 py-3 font-medium text-slate-700">状态</th>
-              <th className="px-4 py-3 font-medium text-slate-700">时间</th>
-              <th className="px-4 py-3 font-medium text-slate-700 w-24">操作</th>
+            <tr className={styles.thead}>
+              <th className={styles.th}>名称</th>
+              <th className={`${styles.th} ${styles.thHideMobile}`}>类型</th>
+              <th className={`${styles.th} ${styles.thHideMobile}`}>大小</th>
+              <th className={styles.th}>状态</th>
+              <th className={`${styles.th} ${styles.thHideMobile}`}>时间</th>
+              <th className={styles.th}>操作</th>
             </tr>
           </thead>
           <tbody>
             {docs.map((doc) => {
-              const status = statusMap[doc.status] ?? { label: doc.status, color: "text-slate-600" };
+              const status = statusMap[doc.status] ?? { label: doc.status, tone: "pending" as const };
               const icon = typeIcons[doc.type] ?? typeIcons.unknown;
+              const badgeClass =
+                status.tone === "pending"
+                  ? styles.badgePending
+                  : status.tone === "processing"
+                    ? styles.badgeProcessing
+                    : status.tone === "completed"
+                      ? styles.badgeCompleted
+                      : styles.badgeFailed;
               return (
-                <tr key={doc.id} className="border-b border-slate-100 hover:bg-slate-50">
-                  <td className="px-4 py-3">
+                <tr key={doc.id} className={styles.tr}>
+                  <td className={styles.td}>
                     <span
-                      className="cursor-pointer truncate max-w-xs inline-block text-indigo-600 hover:underline"
+                      className={styles.nameLink}
                       onClick={() => handlePreview(doc.id)}
                     >
                       {doc.name}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className={`${styles.td} ${styles.tdHideMobile}`}>
                     <span title={doc.type}>{icon} {doc.type}</span>
                   </td>
-                  <td className="px-4 py-3 text-slate-600">{formatSize(doc.size)}</td>
-                  <td className={`px-4 py-3 ${status.color}`}>{status.label}</td>
-                  <td className="px-4 py-3 text-slate-600">{formatDate(doc.created_at)}</td>
-                  <td className="px-4 py-3">
+                  <td className={`${styles.td} ${styles.tdHideMobile} ${styles.muted}`}>{formatSize(doc.size)}</td>
+                  <td className={styles.td}>
+                    <span className={`${styles.badge} ${badgeClass}`}>{status.label}</span>
+                  </td>
+                  <td className={`${styles.td} ${styles.tdHideMobile} ${styles.muted}`}>
+                    {formatDate(doc.created_at, i18n.language)}
+                  </td>
+                  <td className={styles.td}>
                     {!NON_VECTORIZABLE.has(doc.type) && doc.status === "pending" && (
                       <button
                         type="button"
@@ -189,7 +198,7 @@ export function DocumentList({ refreshTrigger = 0, embeddingReady = false }: Doc
                               ? `${doc.type === "video" ? "视频理解" : "语音识别"}耗时较长，请耐心等待`
                               : undefined
                         }
-                        className="mr-3 text-indigo-600 hover:underline disabled:opacity-50"
+                        className={styles.actionLink}
                       >
                         {vectorizingId === doc.id
                           ? "处理中…"
@@ -201,7 +210,7 @@ export function DocumentList({ refreshTrigger = 0, embeddingReady = false }: Doc
                     <button
                       type="button"
                       onClick={() => handleDelete(doc.id, doc.name)}
-                      className="text-red-600 hover:underline"
+                      className={styles.dangerLink}
                     >
                       删除
                     </button>

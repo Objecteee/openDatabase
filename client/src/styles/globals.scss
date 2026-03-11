@@ -1,0 +1,30 @@
+@use "./tokens.scss";
+@use "./reset.scss";
+
+html {
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--color-bg);
+  color: var(--color-text-900);
+}
+
+/* Improve tap targets on mobile */
+button,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Selection */
+::selection {
+  background: var(--color-brand-100);
+}
+

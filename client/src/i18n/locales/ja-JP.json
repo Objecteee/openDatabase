@@ -1,0 +1,83 @@
+{
+  "app": {
+    "title": "OpenDatabase",
+    "nav": {
+      "chat": "チャット",
+      "documents": "ドキュメント",
+      "login": "ログイン",
+      "register": "登録",
+      "logout": "ログアウト"
+    },
+    "common": {
+      "loading": "読み込み中…",
+      "saving": "保存中…",
+      "close": "閉じる",
+      "confirm": "確認",
+      "cancel": "キャンセル",
+      "delete": "削除"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "ログイン",
+      "subtitle": "メールアドレスとパスワードでログイン",
+      "email": "メール",
+      "password": "パスワード",
+      "submit": "ログイン",
+      "submitting": "ログイン中…",
+      "toRegister": "アカウントがありませんか？登録へ"
+    },
+    "register": {
+      "title": "登録",
+      "subtitle": "新規アカウントを作成",
+      "username": "ユーザー名",
+      "email": "メール",
+      "password": "パスワード",
+      "submit": "登録",
+      "submitting": "作成中…",
+      "toLogin": "アカウントがありますか？ログインへ"
+    },
+    "restore": "ログイン状態を復元中…"
+  },
+  "chat": {
+    "newChat": "新しいチャット",
+    "noConversations": "会話がありません",
+    "startHint": "メッセージを入力して開始",
+    "inputPlaceholder": "メッセージを入力…",
+    "send": "送信",
+    "sendLoading": "…",
+    "toolbar": {
+      "boundDocs": "関連ドキュメント：{{count}} 件",
+      "noConversation": "会話未選択（新規会話は自動作成）",
+      "bindDocs": "ドキュメントを関連付け",
+      "openConversations": "会話"
+    },
+    "docPicker": {
+      "title": "この会話で検索するドキュメントを選択",
+      "empty": "ドキュメントがありません。先にアップロードしてベクトル化してください。",
+      "hint": "チェック後すぐ反映：関連付けたドキュメントのみ検索。未選択なら全体検索。",
+      "loading": "読み込み中…"
+    },
+    "citations": {
+      "title": "参照元",
+      "open": "原文を見る ↗",
+      "jump": "ジャンプ ↗",
+      "unknownDoc": "不明なドキュメント",
+      "page": "{{page}} ページ"
+    },
+    "confirmDeleteConversation": "この会話を削除しますか？"
+  },
+  "documents": {
+    "model": {
+      "title": "埋め込みモデルを読み込み中",
+      "timeout": "タイムアウト。再試行またはネットワーク確認。",
+      "initializing": "初期化中…",
+      "firstDownload": "初回は約100MBのダウンロードが必要です。しばらくお待ちください。",
+      "retry": "再試行",
+      "failedTitle": "埋め込みモデルの読み込みに失敗",
+      "failedHint": "何度も失敗する場合はネットワークを確認して更新してください。",
+      "unknownError": "不明なエラー"
+    }
+  }
+}
+

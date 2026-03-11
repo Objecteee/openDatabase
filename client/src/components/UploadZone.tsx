@@ -4,6 +4,7 @@
 
 import { useRef, useState } from "react";
 import type { UploadState } from "../hooks/useFileUpload";
+import styles from "./UploadZone.module.scss";
 
 interface UploadZoneProps {
   state: UploadState;
@@ -36,9 +37,7 @@ export function UploadZone({ state, onUpload, onReset, disabled }: UploadZonePro
 
   return (
     <div
-      className={`rounded-xl border-2 border-dashed p-6 transition-colors ${
-        isDragging && !disabled ? "border-indigo-500 bg-indigo-50/50" : "border-slate-300 bg-slate-50/50 hover:border-indigo-400"
-      }`}
+      className={`${styles.drop} ${isDragging && !disabled ? styles.dropActive : ""}`}
       onDragOver={(e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -55,39 +54,39 @@ export function UploadZone({ state, onUpload, onReset, disabled }: UploadZonePro
       <input
         ref={inputRef}
         type="file"
-        className="hidden"
+        className={styles.hiddenInput}
         onChange={(e) => handleFiles(e.target.files)}
         disabled={disabled}
       />
       <div
-        className="cursor-pointer text-center"
+        className={styles.clickArea}
         onClick={() => !disabled && inputRef.current?.click()}
       >
-        <p className="text-slate-600">{phaseText[state.phase] || state.phase}</p>
+        <p className={styles.text}>{phaseText[state.phase] || state.phase}</p>
         {(state.phase === "hashing" || state.phase === "uploading") && (
-          <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-slate-200">
+          <div className={styles.bar}>
             <div
-              className="h-full bg-indigo-500 transition-all duration-300"
+              className={styles.barFill}
               style={{ width: `${progress}%` }}
             />
           </div>
         )}
         {state.phase === "done" && state.documentId && (
-          <p className="mt-2 text-sm text-green-600">文档 ID: {state.documentId}</p>
+          <p className={styles.ok}>文档 ID: {state.documentId}</p>
         )}
         {state.phase === "error" && state.error && (
-          <p className="mt-2 text-sm text-red-600">{state.error}</p>
+          <p className={styles.err}>{state.error}</p>
         )}
       </div>
       {(state.phase === "done" || state.phase === "error") && (
-        <div className="mt-3 text-center">
+        <div className={styles.footer}>
           <button
             type="button"
             onClick={(e) => {
               e.stopPropagation();
               onReset();
             }}
-            className="text-sm text-indigo-600 hover:underline"
+            className={styles.linkBtn}
           >
             继续上传
           </button>

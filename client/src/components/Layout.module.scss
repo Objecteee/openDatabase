@@ -1,0 +1,139 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg);
+}
+
+.header {
+  height: 56px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.nav {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 16px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  background: linear-gradient(135deg, var(--color-brand-600), var(--color-brand-700));
+  box-shadow: var(--shadow-sm);
+}
+
+.brandText {
+  font-weight: 750;
+  letter-spacing: 0.2px;
+}
+
+.left {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.links {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.link {
+  padding: 8px 10px;
+  border-radius: var(--radius-md);
+  font-size: 14px;
+  color: var(--color-text-600);
+  transition: background var(--dur-1) var(--ease-standard), color var(--dur-1) var(--ease-standard);
+
+  &:hover {
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--color-text-900);
+  }
+}
+
+.linkActive {
+  color: var(--color-brand-600);
+  background: var(--color-brand-100);
+}
+
+.right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.iconBtn {
+  height: 34px;
+  min-width: 34px;
+  padding: 0 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: transparent;
+  color: var(--color-text-600);
+  cursor: pointer;
+  transition: background var(--dur-1) var(--ease-standard), border var(--dur-1) var(--ease-standard),
+    transform var(--dur-1) var(--ease-standard);
+
+  &:hover {
+    background: rgba(148, 163, 184, 0.12);
+    color: var(--color-text-900);
+  }
+
+  &:active {
+    transform: translateY(1px);
+  }
+}
+
+.user {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.userName {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--color-text-600);
+}
+
+.content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Responsive: hide links into menu on small screens */
+@media (max-width: 767px) {
+  .brandText {
+    display: none;
+  }
+
+  .links {
+    display: none;
+  }
+
+  .userName {
+    display: none;
+  }
+}
+

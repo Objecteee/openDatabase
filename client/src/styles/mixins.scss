@@ -1,0 +1,46 @@
+/* SCSS mixins & helpers */
+
+$bp-sm: 480px;
+$bp-md: 768px;
+$bp-lg: 1024px;
+$bp-xl: 1280px;
+
+@mixin up($bp) {
+  @if $bp == sm {
+    @media (min-width: $bp-sm) { @content; }
+  } @else if $bp == md {
+    @media (min-width: $bp-md) { @content; }
+  } @else if $bp == lg {
+    @media (min-width: $bp-lg) { @content; }
+  } @else if $bp == xl {
+    @media (min-width: $bp-xl) { @content; }
+  } @else {
+    @content;
+  }
+}
+
+@mixin down($bp) {
+  @if $bp == sm {
+    @media (max-width: ($bp-sm - 1px)) { @content; }
+  } @else if $bp == md {
+    @media (max-width: ($bp-md - 1px)) { @content; }
+  } @else if $bp == lg {
+    @media (max-width: ($bp-lg - 1px)) { @content; }
+  } @else if $bp == xl {
+    @media (max-width: ($bp-xl - 1px)) { @content; }
+  } @else {
+    @content;
+  }
+}
+
+@mixin textEllipsis {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@mixin focusRing {
+  outline: none;
+  box-shadow: 0 0 0 4px var(--color-focus-ring);
+}
+

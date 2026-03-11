@@ -13,6 +13,8 @@ import { getEmbeddingState } from "../lib/embeddingClient.js";
 import { api } from "../lib/apiClient.js";
 import { useAuthStore } from "../stores/authStore.js";
 import { useChatStore } from "../stores/chatStore.js";
+import { useTranslation } from "react-i18next";
+import styles from "./ChatPage.module.scss";
 
 // ─── 类型 ────────────────────────────────────────────────────────────
 import type { Citation, Message } from "../stores/chatStore.js";
@@ -29,6 +31,7 @@ const DOCUMENTS_API = "/documents";
 // ─── 组件 ────────────────────────────────────────────────────────────
 
 export function ChatPage() {
+  const { t, i18n } = useTranslation();
   const conversations = useChatStore((s) => s.conversations);
   const conversationsLoading = useChatStore((s) => s.conversationsLoading);
   const currentConversationId = useChatStore((s) => s.currentConversationId);
@@ -45,6 +48,7 @@ export function ChatPage() {
   const [docPickerOpen, setDocPickerOpen] = useState(false);
   const [allDocuments, setAllDocuments] = useState<DocumentItem[]>([]);
   const [docPickerLoading, setDocPickerLoading] = useState(false);
+  const [conversationsOpen, setConversationsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const rafIdRef = useRef<number | null>(null);
   const pendingChunksRef = useRef<string[]>([]);
@@ -54,9 +58,19 @@ export function ChatPage() {
     fetchConversations();
   }, [fetchConversations]);
 
+  useEffect(() => {
+    if (!conversationsOpen) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setConversationsOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [conversationsOpen]);
+
   const handleNewChat = useCallback(() => {
     newChat();
     setError(null);
+    setConversationsOpen(false);
   }, [newChat]);
 
   const openDocPicker = useCallback(async () => {
@@ -104,23 +118,25 @@ export function ChatPage() {
   const handleDeleteConversation = useCallback(
     async (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
-      if (!window.confirm("确定删除该会话？")) return;
+      if (!window.confirm(t("chat.confirmDeleteConversation"))) return;
       try {
         await deleteConversation(id);
       } catch (err) {
         setError(err instanceof Error ? err.message : "删除失败");
+      } finally {
+        setConversationsOpen(false);
       }
     },
-    [deleteConversation]
+    [deleteConversation, t]
   );
 
   const formatConversationDate = (dateStr: string) => {
     const d = new Date(dateStr);
     const now = new Date();
     if (d.toDateString() === now.toDateString()) {
-      return d.toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+      return d.toLocaleTimeString(i18n.language, { hour: "2-digit", minute: "2-digit" });
     }
-    return d.toLocaleDateString("zh-CN", { month: "numeric", day: "numeric" });
+    return d.toLocaleDateString(i18n.language, { month: "numeric", day: "numeric" });
   };
 
   const scrollToBottom = useCallback(() => {
@@ -299,25 +315,25 @@ export function ChatPage() {
   };
 
   return (
-    <div className="flex flex-1 min-h-0">
+    <div className={styles.page}>
       {/* 左侧会话列表 */}
-      <aside className="w-56 flex-shrink-0 border-r border-slate-200 bg-white flex flex-col min-h-0">
-        <div className="p-2 border-b border-slate-100">
+      <aside className={styles.sidebar}>
+        <div className={styles.sidebarHeader}>
           <button
             type="button"
             onClick={handleNewChat}
-            className="w-full px-3 py-2 text-left text-sm font-medium text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+            className={styles.newChatBtn}
           >
-            + 新对话
+            + {t("chat.newChat")}
           </button>
         </div>
-        <div className="flex-1 overflow-y-auto">
+        <div className={styles.convList}>
           {conversationsLoading ? (
-            <div className="p-3 text-xs text-slate-400">加载中…</div>
+            <div className={styles.convEmpty}>{t("app.common.loading")}</div>
           ) : conversations.length === 0 ? (
-            <div className="p-3 text-xs text-slate-400">暂无会话</div>
+            <div className={styles.convEmpty}>{t("chat.noConversations")}</div>
           ) : (
-            <ul className="p-1">
+            <ul>
               {conversations.map((c) => (
                 <li key={c.id}>
                   <div
@@ -325,21 +341,19 @@ export function ChatPage() {
                     tabIndex={0}
                     onClick={() => loadConversation(c.id)}
                     onKeyDown={(e) => e.key === "Enter" && loadConversation(c.id)}
-                    className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-left ${
-                      currentConversationId === c.id ? "bg-indigo-50 text-indigo-700" : "hover:bg-slate-50 text-slate-700"
-                    }`}
+                    className={`${styles.convItem} ${currentConversationId === c.id ? styles.convItemActive : ""}`}
                   >
-                    <span className="flex-1 min-w-0 truncate text-sm" title={c.title ?? "新对话"}>
-                      {c.title?.trim() || "新对话"}
+                    <span className={styles.convTitle} title={c.title ?? t("chat.newChat")}>
+                      {c.title?.trim() || t("chat.newChat")}
                     </span>
-                    <span className="flex-shrink-0 text-xs text-slate-400">
+                    <span className={styles.convMeta}>
                       {formatConversationDate(c.updated_at)}
                     </span>
                     <button
                       type="button"
                       onClick={(e) => handleDeleteConversation(c.id, e)}
-                      className="flex-shrink-0 opacity-0 group-hover:opacity-100 p-0.5 text-slate-400 hover:text-red-500 transition-all"
-                      title="删除"
+                      className={styles.convDelete}
+                      title={t("app.common.delete")}
                     >
                       ×
                     </button>
@@ -351,50 +365,57 @@ export function ChatPage() {
         </div>
       </aside>
 
-      <div className="flex flex-1 flex-col min-h-0 min-w-0">
+      <div className={styles.panel}>
         {/* 会话工具栏：仅在已选中会话时展示 */}
-        <div className="flex-shrink-0 border-b border-slate-200 bg-white px-4 py-2 flex items-center justify-between">
-          <div className="text-sm text-slate-600">
+        <div className={styles.toolbar}>
+          <div className={styles.toolbarLeftWrap}>
+            <button
+              type="button"
+              className={`${styles.toolbarBtn} ${styles.mobileOnly}`}
+              onClick={() => setConversationsOpen(true)}
+              aria-label="conversations"
+            >
+              ☰ {t("chat.toolbar.openConversations")}
+            </button>
+            <div className={styles.toolbarLeft}>
             {currentConversationId ? (
-              <span>
-                已关联文档：{boundDocumentIds.size} 个
-              </span>
+              <span>{t("chat.toolbar.boundDocs", { count: boundDocumentIds.size })}</span>
             ) : (
-              <span>未选择会话（新对话将自动创建会话）</span>
+              <span>{t("chat.toolbar.noConversation")}</span>
             )}
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div>
             <button
               type="button"
               disabled={!currentConversationId}
               onClick={openDocPicker}
-              className="px-3 py-1.5 text-sm rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-50"
-              title={!currentConversationId ? "请先选择一个会话" : "选择该会话的检索范围文档"}
+              className={styles.toolbarBtn}
+              title={!currentConversationId ? t("chat.toolbar.noConversation") : t("chat.toolbar.bindDocs")}
             >
-              关联文档
+              {t("chat.toolbar.bindDocs")}
             </button>
           </div>
         </div>
 
-        <main className="flex-1 overflow-y-auto p-4 space-y-4">
+        <main className={styles.messages}>
           {messages.length === 0 && (
-            <div className="text-center text-slate-500 py-12">输入消息开始对话</div>
+            <div className={styles.startHint}>{t("chat.startHint")}</div>
           )}
 
         {messages.map((msg) => (
-          <div key={msg.id} className={`flex flex-col ${msg.role === "user" ? "items-end" : "items-start"}`}>
+          <div
+            key={msg.id}
+            className={`${styles.msgRow} ${msg.role === "user" ? styles.msgRowUser : styles.msgRowAssistant}`}
+          >
             {/* 消息气泡 */}
             <div
-              className={`max-w-[80%] rounded-2xl px-4 py-2 ${
-                msg.role === "user"
-                  ? "bg-indigo-600 text-white"
-                  : "bg-white border border-slate-200 text-slate-800 shadow-sm"
-              }`}
+              className={`${styles.bubble} ${msg.role === "user" ? styles.bubbleUser : styles.bubbleAssistant}`}
             >
               {msg.role === "user" ? (
                 <p className="whitespace-pre-wrap break-words">{msg.content}</p>
               ) : (
-                <div className="prose prose-slate prose-sm max-w-none prose-p:my-1 prose-headings:my-2 prose-pre:my-2 prose-ul:my-1 prose-ol:my-1 prose-code:bg-slate-100 prose-code:px-1 prose-code:rounded prose-pre:bg-slate-100 prose-a:text-indigo-600 prose-a:no-underline hover:prose-a:underline">
+                <div className={styles.md}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {msg.content || (msg.streaming ? "..." : "")}
                   </ReactMarkdown>
@@ -405,7 +426,7 @@ export function ChatPage() {
             {/* 引用来源卡片（仅 assistant 消息，有 citations 时展示）*/}
             {msg.role === "assistant" && msg.citations && msg.citations.length > 0 && (
               <div className="mt-2 max-w-[80%] w-full">
-                <p className="text-xs text-slate-400 mb-1 px-1">参考来源</p>
+                <p className="text-xs text-slate-400 mb-1 px-1">{t("chat.citations.title")}</p>
                 <div className="flex flex-col gap-1.5">
                   {msg.citations.map((c, idx) => (
                     <CitationCard key={c.id} index={idx + 1} citation={c} />
@@ -419,26 +440,24 @@ export function ChatPage() {
         <div ref={messagesEndRef} />
       </main>
 
-      {error && (
-        <div className="px-4 py-2 bg-red-50 text-red-600 text-sm">{error}</div>
-      )}
+      {error && <div className={styles.errorBar}>{error}</div>}
 
-      <form onSubmit={handleSubmit} className="flex-shrink-0 p-4 border-t border-slate-200 bg-white">
-        <div className="flex gap-2 max-w-3xl mx-auto">
+      <form onSubmit={handleSubmit} className={styles.composer}>
+        <div className={styles.composerInner}>
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="输入消息..."
-            className="flex-1 px-4 py-2 border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            placeholder={t("chat.inputPlaceholder")}
+            className={styles.input}
             disabled={loading}
           />
           <button
             type="submit"
             disabled={loading || !input.trim()}
-            className="px-6 py-2 bg-indigo-600 text-white font-medium rounded-xl hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={styles.sendBtn}
           >
-            {loading ? "..." : "发送"}
+            {loading ? t("chat.sendLoading") : t("chat.send")}
           </button>
         </div>
       </form>
@@ -447,50 +466,50 @@ export function ChatPage() {
       {/* 关联文档弹层 */}
       {docPickerOpen && currentConversationId && (
         <div
-          className="fixed inset-0 bg-black/30 flex items-center justify-center p-4"
+          className={styles.overlay}
           onClick={() => !docPickerLoading && setDocPickerOpen(false)}
         >
           <div
-            className="w-full max-w-2xl bg-white rounded-xl shadow-lg border border-slate-200 overflow-hidden"
+            className={styles.modal}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-              <div className="text-sm font-medium text-slate-700">选择该会话的检索文档</div>
+            <div className={styles.modalHeader}>
+              <div className={styles.modalTitle}>{t("chat.docPicker.title")}</div>
               <button
                 type="button"
                 disabled={docPickerLoading}
                 onClick={() => setDocPickerOpen(false)}
-                className="text-slate-400 hover:text-slate-600 disabled:opacity-50"
-                title="关闭"
+                className={styles.modalClose}
+                title={t("app.common.close")}
               >
                 ×
               </button>
             </div>
 
-            <div className="p-4">
+            <div className={styles.modalBody}>
               {docPickerLoading ? (
-                <div className="text-sm text-slate-500">加载中…</div>
+                <div className="text-sm text-slate-500">{t("chat.docPicker.loading")}</div>
               ) : allDocuments.length === 0 ? (
-                <div className="text-sm text-slate-500">暂无文档，可先去文档库上传并向量化。</div>
+                <div className="text-sm text-slate-500">{t("chat.docPicker.empty")}</div>
               ) : (
-                <div className="max-h-[55vh] overflow-y-auto border border-slate-200 rounded-lg">
-                  <ul className="divide-y divide-slate-100">
+                <div className={styles.docListBox}>
+                  <ul>
                     {allDocuments.map((d) => {
                       const checked = boundDocumentIds.has(d.id);
                       const disabled = d.status === "failed" || d.status === "processing";
                       return (
-                        <li key={d.id} className="px-3 py-2 flex items-center gap-3">
+                        <li key={d.id} className={styles.docRow}>
                           <input
                             type="checkbox"
                             checked={checked}
                             disabled={docPickerLoading || disabled}
                             onChange={() => toggleBoundDocument(d.id)}
                           />
-                          <div className="min-w-0 flex-1">
-                            <div className="text-sm text-slate-800 truncate" title={d.name}>
+                          <div className={styles.docMeta}>
+                            <div className={styles.docName} title={d.name}>
                               {d.name}
                             </div>
-                            <div className="text-xs text-slate-400">
+                            <div className={styles.docSub}>
                               {d.type}
                               {d.status ? ` · ${d.status}` : ""}
                             </div>
@@ -501,9 +520,70 @@ export function ChatPage() {
                   </ul>
                 </div>
               )}
-              <div className="mt-3 text-xs text-slate-400">
-                勾选后会立即生效：后续对话将仅在已关联文档中检索；不勾选则默认全库检索。
-              </div>
+              <div className={styles.hint}>{t("chat.docPicker.hint")}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 移动端会话抽屉 */}
+      {conversationsOpen && (
+        <div className={styles.drawerOverlay} onClick={() => setConversationsOpen(false)}>
+          <div className={styles.drawer} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.drawerHeader}>
+              <div className={styles.drawerTitle}>{t("chat.toolbar.openConversations")}</div>
+              <button
+                type="button"
+                className={styles.drawerClose}
+                onClick={() => setConversationsOpen(false)}
+                title={t("app.common.close")}
+              >
+                ×
+              </button>
+            </div>
+            {/* 复用同一份会话列表 UI（样式一致） */}
+            <div className={styles.sidebarHeader}>
+              <button
+                type="button"
+                onClick={handleNewChat}
+                className={styles.newChatBtn}
+              >
+                + {t("chat.newChat")}
+              </button>
+            </div>
+            <div className={styles.convList}>
+              {conversationsLoading ? (
+                <div className={styles.convEmpty}>{t("app.common.loading")}</div>
+              ) : conversations.length === 0 ? (
+                <div className={styles.convEmpty}>{t("chat.noConversations")}</div>
+              ) : (
+                <ul>
+                  {conversations.map((c) => (
+                    <li key={c.id}>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => {
+                          loadConversation(c.id);
+                          setConversationsOpen(false);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            loadConversation(c.id);
+                            setConversationsOpen(false);
+                          }
+                        }}
+                        className={`${styles.convItem} ${currentConversationId === c.id ? styles.convItemActive : ""}`}
+                      >
+                        <span className={styles.convTitle} title={c.title ?? t("chat.newChat")}>
+                          {c.title?.trim() || t("chat.newChat")}
+                        </span>
+                        <span className={styles.convMeta}>{formatConversationDate(c.updated_at)}</span>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
           </div>
         </div>

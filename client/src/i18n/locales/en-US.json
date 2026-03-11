@@ -1,0 +1,83 @@
+{
+  "app": {
+    "title": "OpenDatabase",
+    "nav": {
+      "chat": "Chat",
+      "documents": "Documents",
+      "login": "Login",
+      "register": "Register",
+      "logout": "Logout"
+    },
+    "common": {
+      "loading": "Loading…",
+      "saving": "Saving…",
+      "close": "Close",
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "delete": "Delete"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "Login",
+      "subtitle": "Sign in with email and password",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Login",
+      "submitting": "Signing in…",
+      "toRegister": "No account? Register"
+    },
+    "register": {
+      "title": "Register",
+      "subtitle": "Create a new account",
+      "username": "Username",
+      "email": "Email",
+      "password": "Password",
+      "submit": "Register",
+      "submitting": "Creating…",
+      "toLogin": "Have an account? Login"
+    },
+    "restore": "Restoring session…"
+  },
+  "chat": {
+    "newChat": "New chat",
+    "noConversations": "No conversations",
+    "startHint": "Type a message to start",
+    "inputPlaceholder": "Type a message…",
+    "send": "Send",
+    "sendLoading": "…",
+    "toolbar": {
+      "boundDocs": "Bound documents: {{count}}",
+      "noConversation": "No conversation selected (a new one will be created automatically)",
+      "bindDocs": "Bind documents",
+      "openConversations": "Conversations"
+    },
+    "docPicker": {
+      "title": "Select documents for this conversation",
+      "empty": "No documents yet. Upload and vectorize in Documents first.",
+      "hint": "Changes apply immediately: retrieval will be limited to bound documents; if none bound, it searches across all documents.",
+      "loading": "Loading…"
+    },
+    "citations": {
+      "title": "Sources",
+      "open": "Open source ↗",
+      "jump": "Jump ↗",
+      "unknownDoc": "Unknown document",
+      "page": "Page {{page}}"
+    },
+    "confirmDeleteConversation": "Delete this conversation?"
+  },
+  "documents": {
+    "model": {
+      "title": "Loading embedding model",
+      "timeout": "Timed out. Retry or check your network.",
+      "initializing": "Initializing model…",
+      "firstDownload": "First use requires ~100MB download. Please wait.",
+      "retry": "Retry",
+      "failedTitle": "Failed to load embedding model",
+      "failedHint": "If it keeps failing, check your network and refresh.",
+      "unknownError": "Unknown error"
+    }
+  }
+}
+

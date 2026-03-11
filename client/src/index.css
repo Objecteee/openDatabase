@@ -1,8 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Deprecated: Tailwind entry removed.
+   Keep this file as a stable import path from main.tsx.
+*/
 
-body {
-  margin: 0;
-  font-family: system-ui, -apple-system, sans-serif;
-}
+@import "./styles/globals.scss";

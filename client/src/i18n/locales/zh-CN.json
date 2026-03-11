@@ -1,0 +1,83 @@
+{
+  "app": {
+    "title": "OpenDatabase",
+    "nav": {
+      "chat": "对话",
+      "documents": "文档库",
+      "login": "登录",
+      "register": "注册",
+      "logout": "退出"
+    },
+    "common": {
+      "loading": "加载中…",
+      "saving": "保存中…",
+      "close": "关闭",
+      "confirm": "确认",
+      "cancel": "取消",
+      "delete": "删除"
+    }
+  },
+  "auth": {
+    "login": {
+      "title": "登录",
+      "subtitle": "使用邮箱和密码登录",
+      "email": "邮箱",
+      "password": "密码",
+      "submit": "登录",
+      "submitting": "登录中…",
+      "toRegister": "没有账号？去注册"
+    },
+    "register": {
+      "title": "注册",
+      "subtitle": "创建一个新账号",
+      "username": "用户名",
+      "email": "邮箱",
+      "password": "密码",
+      "submit": "注册",
+      "submitting": "注册中…",
+      "toLogin": "已有账号？去登录"
+    },
+    "restore": "正在恢复登录态…"
+  },
+  "chat": {
+    "newChat": "新对话",
+    "noConversations": "暂无会话",
+    "startHint": "输入消息开始对话",
+    "inputPlaceholder": "输入消息…",
+    "send": "发送",
+    "sendLoading": "…",
+    "toolbar": {
+      "boundDocs": "已关联文档：{{count}} 个",
+      "noConversation": "未选择会话（新对话将自动创建会话）",
+      "bindDocs": "关联文档",
+      "openConversations": "会话"
+    },
+    "docPicker": {
+      "title": "选择该会话的检索文档",
+      "empty": "暂无文档，可先去文档库上传并向量化。",
+      "hint": "勾选后会立即生效：后续对话将仅在已关联文档中检索；不勾选则默认全库检索。",
+      "loading": "加载中…"
+    },
+    "citations": {
+      "title": "参考来源",
+      "open": "查看原文 ↗",
+      "jump": "跳转 ↗",
+      "unknownDoc": "未知文档",
+      "page": "第 {{page}} 页"
+    },
+    "confirmDeleteConversation": "确定删除该会话？"
+  },
+  "documents": {
+    "model": {
+      "title": "向量化模型加载中",
+      "timeout": "加载超时，请重试或检查网络",
+      "initializing": "正在初始化模型，请稍候…",
+      "firstDownload": "首次使用需下载约 100MB，请耐心等待",
+      "retry": "重新加载",
+      "failedTitle": "向量化模型加载失败",
+      "failedHint": "若多次失败，请检查网络连接后刷新页面。",
+      "unknownError": "未知错误"
+    }
+  }
+}
+

@@ -1,0 +1,147 @@
+.wrap {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.thead {
+  background: rgba(148, 163, 184, 0.10);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.th {
+  text-align: left;
+  padding: 12px 14px;
+  font-weight: 650;
+  color: var(--color-text-600);
+  white-space: nowrap;
+}
+
+.tr {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+
+  &:hover {
+    background: rgba(148, 163, 184, 0.08);
+  }
+}
+
+.td {
+  padding: 12px 14px;
+  color: var(--color-text-900);
+  vertical-align: middle;
+}
+
+.muted {
+  color: var(--color-text-600);
+}
+
+.nameLink {
+  color: var(--color-brand-600);
+  cursor: pointer;
+  display: inline-block;
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.actionLink {
+  color: var(--color-brand-600);
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+
+  &:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+}
+
+.dangerLink {
+  color: var(--color-danger-600);
+  cursor: pointer;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.empty {
+  padding: 48px 0;
+  text-align: center;
+  color: var(--color-text-600);
+}
+
+.error {
+  padding: 24px 0;
+  text-align: center;
+  color: var(--color-danger-600);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: rgba(148, 163, 184, 0.10);
+  color: var(--color-text-600);
+}
+
+.badgePending {
+  background: rgba(217, 119, 6, 0.12);
+  border-color: rgba(217, 119, 6, 0.28);
+  color: var(--color-warning-600);
+}
+
+.badgeProcessing {
+  background: rgba(59, 130, 246, 0.12);
+  border-color: rgba(59, 130, 246, 0.28);
+  color: #3B82F6;
+}
+
+.badgeCompleted {
+  background: rgba(22, 163, 74, 0.12);
+  border-color: rgba(22, 163, 74, 0.28);
+  color: var(--color-success-600);
+}
+
+.badgeFailed {
+  background: rgba(248, 113, 113, 0.12);
+  border-color: rgba(248, 113, 113, 0.28);
+  color: var(--color-danger-600);
+}
+
+@media (max-width: 767px) {
+  .thHideMobile,
+  .tdHideMobile {
+    display: none;
+  }
+
+  .nameLink {
+    max-width: 220px;
+  }
+}
+

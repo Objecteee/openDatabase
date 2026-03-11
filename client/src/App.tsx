@@ -8,6 +8,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout.js";
 import { useAuthStore } from "./stores/authStore.js";
 import { Navigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 const ChatPage = lazy(() => import("./pages/ChatPage.js").then((m) => ({ default: m.ChatPage })));
 const DocumentsPage = lazy(() => import("./pages/DocumentsPage.js").then((m) => ({ default: m.DocumentsPage })));
@@ -18,12 +19,13 @@ function RequireLogin({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken);
   const initialized = useAuthStore((s) => s.initialized);
   const initializing = useAuthStore((s) => s.initializing);
+  const { t } = useTranslation();
 
   // 启动恢复登录态期间，不做跳转，避免刷新页面瞬间被踢到 /login
   if (!initialized || initializing) {
     return (
-      <div className="min-h-[calc(100vh-56px)] flex items-center justify-center bg-slate-50">
-        <div className="text-slate-500 text-sm">正在恢复登录态…</div>
+      <div style={{ minHeight: "calc(100vh - 56px)", display: "grid", placeItems: "center" }}>
+        <div style={{ color: "var(--color-text-600)", fontSize: 14 }}>{t("auth.restore")}</div>
       </div>
     );
   }
@@ -34,6 +36,7 @@ function RequireLogin({ children }: { children: React.ReactNode }) {
 
 function App() {
   const initAuth = useAuthStore((s) => s.initAuth);
+  useTranslation(); // ensure i18n context ready before rendering routes
 
   useEffect(() => {
     initAuth();
@@ -43,8 +46,8 @@ function App() {
     <BrowserRouter>
       <Suspense
         fallback={
-          <div className="min-h-screen flex items-center justify-center bg-slate-50">
-            <div className="text-slate-500 text-sm">加载中…</div>
+          <div style={{ minHeight: "100vh", display: "grid", placeItems: "center" }}>
+            <div style={{ color: "var(--color-text-600)", fontSize: 14 }}>Loading…</div>
           </div>
         }
       >

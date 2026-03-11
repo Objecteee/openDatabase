@@ -4,6 +4,8 @@
 
 import { useRef, useState } from "react";
 import type { UploadItem } from "../hooks/useMultiFileUpload.js";
+import { useTranslation } from "react-i18next";
+import styles from "./MultiFileUploadZone.module.scss";
 
 interface MultiFileUploadZoneProps {
   items: UploadItem[];
@@ -35,6 +37,7 @@ export function MultiFileUploadZone({
   onClearCompleted,
   disabled = false,
 }: MultiFileUploadZoneProps) {
+  const { t } = useTranslation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -47,15 +50,13 @@ export function MultiFileUploadZone({
   const hasCompleted = items.some((it) => it.phase === "done" || it.phase === "error");
 
   return (
-    <div className="space-y-3">
+    <div className={styles.wrap}>
       <div
-        className={`rounded-xl border-2 border-dashed p-6 transition-colors ${
-          disabled
-            ? "border-slate-200 bg-slate-100 cursor-not-allowed opacity-75"
-            : isDragging
-              ? "border-indigo-500 bg-indigo-50/50"
-              : "border-slate-300 bg-slate-50/50 hover:border-indigo-400"
-        }`}
+        className={[
+          styles.drop,
+          disabled ? styles.dropDisabled : "",
+          isDragging ? styles.dropActive : "",
+        ].join(" ")}
         onDragOver={(e) => {
           e.preventDefault();
           e.stopPropagation();
@@ -72,55 +73,60 @@ export function MultiFileUploadZone({
         <input
           ref={inputRef}
           type="file"
-          className="hidden"
+          className={styles.hiddenInput}
           multiple
           disabled={disabled}
           onChange={(e) => handleFiles(e.target.files)}
         />
         <div
-          className={`text-center text-slate-600 ${disabled ? "cursor-not-allowed" : "cursor-pointer"}`}
+          className={[
+            styles.dropText,
+            disabled ? styles.dropTextDisabled : "",
+          ].join(" ")}
           onClick={() => !disabled && inputRef.current?.click()}
         >
-          {disabled ? "模型加载中，请稍候…" : "选择或拖拽文件上传（支持多选）"}
+          {disabled ? t("documents.model.initializing") : "选择或拖拽文件上传（支持多选）"}
         </div>
       </div>
 
       {items.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex items-center justify-between text-sm text-slate-600">
+        <div>
+          <div className={styles.queueHeader}>
             <span>上传队列</span>
             {hasCompleted && (
               <button
                 type="button"
                 onClick={onClearCompleted}
-                className="text-indigo-600 hover:underline"
+                className={styles.linkBtn}
               >
                 清除已完成
               </button>
             )}
           </div>
-          <ul className="max-h-48 overflow-y-auto space-y-1 rounded-lg border border-slate-200 bg-white p-2">
+          <ul className={styles.queue}>
             {items.map((it) => (
               <li
                 key={it.id}
-                className="flex items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-slate-50"
+                className={styles.item}
               >
-                <span className="min-w-0 flex-1 truncate text-slate-800" title={it.file.name}>
+                <span className={styles.name} title={it.file.name}>
                   {it.file.name}
                 </span>
-                <span className="flex-shrink-0 text-slate-400">{formatSize(it.file.size)}</span>
+                <span className={styles.size}>{formatSize(it.file.size)}</span>
                 <span
-                  className={`flex-shrink-0 text-xs ${
-                    it.phase === "done" ? "text-green-600" : it.phase === "error" ? "text-red-600" : "text-slate-500"
-                  }`}
+                  className={[
+                    styles.phase,
+                    it.phase === "done" ? styles.phaseOk : "",
+                    it.phase === "error" ? styles.phaseErr : "",
+                  ].join(" ")}
                 >
                   {phaseText[it.phase] || it.phase}
                   {it.phase === "error" && it.error ? `: ${it.error}` : ""}
                 </span>
                 {(it.phase === "hashing" || it.phase === "uploading") && (
-                  <div className="w-16 h-1 flex-shrink-0 overflow-hidden rounded-full bg-slate-200">
+                  <div className={styles.miniBar}>
                     <div
-                      className="h-full bg-indigo-500 transition-all duration-300"
+                      className={styles.miniBarFill}
                       style={{
                         width: `${(it.phase === "hashing" ? (it.hashProgress ?? 0) : it.progress) * 100}%`,
                       }}
@@ -130,7 +136,7 @@ export function MultiFileUploadZone({
                 <button
                   type="button"
                   onClick={() => onRemoveItem(it.id)}
-                  className="flex-shrink-0 text-slate-400 hover:text-red-600"
+                  className={styles.remove}
                   title="移除"
                 >
                   ×

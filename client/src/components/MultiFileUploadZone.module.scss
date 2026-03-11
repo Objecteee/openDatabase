@@ -1,0 +1,141 @@
+.wrap {
+  display: grid;
+  gap: 12px;
+}
+
+.drop {
+  border-radius: var(--radius-lg);
+  border: 2px dashed var(--color-border);
+  padding: 18px;
+  background: rgba(148, 163, 184, 0.08);
+  transition: border-color var(--dur-1) var(--ease-standard), background var(--dur-1) var(--ease-standard);
+}
+
+.dropDisabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.dropActive {
+  border-color: var(--color-brand-600);
+  background: rgba(99, 102, 241, 0.12);
+}
+
+.dropText {
+  text-align: center;
+  font-size: 14px;
+  color: var(--color-text-600);
+  cursor: pointer;
+}
+
+.dropTextDisabled {
+  cursor: not-allowed;
+}
+
+.queueHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--color-text-600);
+  font-size: 13px;
+}
+
+.linkBtn {
+  color: var(--color-brand-600);
+  cursor: pointer;
+  text-decoration: none;
+
+  &:hover {
+    text-decoration: underline;
+  }
+}
+
+.queue {
+  max-height: 220px;
+  overflow: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  padding: 8px;
+  display: grid;
+  gap: 6px;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  transition: background var(--dur-1) var(--ease-standard);
+
+  &:hover {
+    background: rgba(148, 163, 184, 0.10);
+  }
+}
+
+.name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-text-900);
+  font-size: 13px;
+}
+
+.size {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-400);
+}
+
+.phase {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-600);
+}
+
+.phaseOk {
+  color: var(--color-success-600);
+}
+
+.phaseErr {
+  color: var(--color-danger-600);
+}
+
+.miniBar {
+  width: 84px;
+  height: 8px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.18);
+  overflow: hidden;
+}
+
+.miniBarFill {
+  height: 100%;
+  background: var(--color-brand-600);
+  transition: width var(--dur-2) var(--ease-standard);
+}
+
+.remove {
+  flex-shrink: 0;
+  height: 26px;
+  min-width: 26px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  color: var(--color-text-400);
+  cursor: pointer;
+
+  &:hover {
+    color: var(--color-danger-600);
+    background: rgba(248, 113, 113, 0.10);
+    border-color: rgba(248, 113, 113, 0.22);
+  }
+}
+
+.hiddenInput {
+  display: none;
+}
+
