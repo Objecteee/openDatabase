@@ -6,19 +6,26 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import cookieParser from "cookie-parser";
 import chatRouter from "./routes/chat.js";
 import documentsRouter from "./routes/documents.js";
 import conversationsRouter from "./routes/conversations.js";
+import authRouter from "./routes/auth.js";
+import { requireAuth } from "./middleware/authMiddleware.js";
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
+app.use(cors({ origin: true, credentials: true }));
+app.use(cookieParser());
 app.use(express.json({ limit: "10mb" }));
 
-app.use("/api", chatRouter);
-app.use("/api/documents", documentsRouter);
-app.use("/api/conversations", conversationsRouter);
+app.use("/api", authRouter);
+
+// 需要登录的 API（未登录会被 401 拦截）
+app.use("/api", requireAuth, chatRouter);
+app.use("/api/documents", requireAuth, documentsRouter);
+app.use("/api/conversations", requireAuth, conversationsRouter);
 
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "chat-api" });

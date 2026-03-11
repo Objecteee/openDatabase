@@ -4,8 +4,7 @@
 
 import { useState, useEffect } from "react";
 import { vectorizeDocument } from "../lib/vectorizeService.js";
-
-const API_BASE = "/api/documents";
+import { useDocumentsStore } from "../stores/documentsStore.js";
 
 export interface Document {
   id: string;
@@ -75,26 +74,13 @@ interface DocumentListProps {
 }
 
 export function DocumentList({ refreshTrigger = 0, embeddingReady = false }: DocumentListProps) {
-  const [docs, setDocs] = useState<Document[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const docs = useDocumentsStore((s) => s.docs) as unknown as Document[];
+  const loading = useDocumentsStore((s) => s.loading);
+  const error = useDocumentsStore((s) => s.error);
+  const fetchDocs = useDocumentsStore((s) => s.fetchDocs);
+  const deleteDoc = useDocumentsStore((s) => s.deleteDoc);
+  const getPreviewUrl = useDocumentsStore((s) => s.getPreviewUrl);
   const [vectorizingId, setVectorizingId] = useState<string | null>(null);
-
-  const fetchDocs = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(API_BASE);
-      if (!res.ok) throw new Error("加载失败");
-      const data = await res.json();
-      setDocs(data ?? []);
-      setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "加载失败");
-      setDocs([]);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   useEffect(() => {
     fetchDocs();
@@ -103,9 +89,7 @@ export function DocumentList({ refreshTrigger = 0, embeddingReady = false }: Doc
   const handleDelete = async (id: string, name: string) => {
     if (!window.confirm(`确定删除「${name}」？`)) return;
     try {
-      const res = await fetch(`${API_BASE}/${id}`, { method: "DELETE" });
-      if (!res.ok) throw new Error("删除失败");
-      setDocs((prev) => prev.filter((d) => d.id !== id));
+      await deleteDoc(id);
     } catch (e) {
       alert(e instanceof Error ? e.message : "删除失败");
     }
@@ -127,9 +111,7 @@ export function DocumentList({ refreshTrigger = 0, embeddingReady = false }: Doc
 
   const handlePreview = async (id: string) => {
     try {
-      const res = await fetch(`${API_BASE}/${id}/url`);
-      if (!res.ok) throw new Error("获取预览链接失败");
-      const { url } = await res.json();
+      const url = await getPreviewUrl(id);
       if (url) window.open(url, "_blank");
     } catch (e) {
       alert(e instanceof Error ? e.message : "预览失败");

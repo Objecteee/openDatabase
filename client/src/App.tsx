@@ -6,9 +6,19 @@
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout.js";
+import { useAuthStore } from "./stores/authStore.js";
+import { Navigate } from "react-router-dom";
 
 const ChatPage = lazy(() => import("./pages/ChatPage.js").then((m) => ({ default: m.ChatPage })));
 const DocumentsPage = lazy(() => import("./pages/DocumentsPage.js").then((m) => ({ default: m.DocumentsPage })));
+const LoginPage = lazy(() => import("./pages/LoginPage.js").then((m) => ({ default: m.LoginPage })));
+const RegisterPage = lazy(() => import("./pages/RegisterPage.js").then((m) => ({ default: m.RegisterPage })));
+
+function RequireLogin({ children }: { children: React.ReactNode }) {
+  const token = useAuthStore((s) => s.accessToken);
+  if (!token) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
 
 function App() {
   return (
@@ -22,8 +32,24 @@ function App() {
       >
         <Routes>
           <Route path="/" element={<Layout />}>
-            <Route index element={<ChatPage />} />
-            <Route path="documents" element={<DocumentsPage />} />
+            <Route
+              index
+              element={
+                <RequireLogin>
+                  <ChatPage />
+                </RequireLogin>
+              }
+            />
+            <Route
+              path="documents"
+              element={
+                <RequireLogin>
+                  <DocumentsPage />
+                </RequireLogin>
+              }
+            />
+            <Route path="login" element={<LoginPage />} />
+            <Route path="register" element={<RegisterPage />} />
           </Route>
         </Routes>
       </Suspense>

@@ -9,6 +9,8 @@ export default defineConfig({
       "/api": {
         target: "http://localhost:3000",
         changeOrigin: true,
+        // 需要把服务端 set-cookie 的 refresh_token 透传给浏览器
+        cookieDomainRewrite: "",
       },
     },
   },

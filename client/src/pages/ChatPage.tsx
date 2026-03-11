@@ -10,33 +10,12 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { embed } from "../lib/embeddingClient.js";
 import { getEmbeddingState } from "../lib/embeddingClient.js";
+import { api } from "../lib/apiClient.js";
+import { useAuthStore } from "../stores/authStore.js";
+import { useChatStore } from "../stores/chatStore.js";
 
 // ─── 类型 ────────────────────────────────────────────────────────────
-
-interface Citation {
-  id: string;
-  document_id: string;
-  content: string;
-  metadata: Record<string, unknown>;
-  document_name: string | null;
-  pointer: string | null;
-  file_url: string | null;
-}
-
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  streaming?: boolean;
-  citations?: Citation[];
-}
-
-interface Conversation {
-  id: string;
-  title: string | null;
-  created_at: string;
-  updated_at: string;
-}
+import type { Citation, Message } from "../stores/chatStore.js";
 
 interface DocumentItem {
   id: string;
@@ -45,88 +24,40 @@ interface DocumentItem {
   status?: string;
 }
 
-const API_BASE = "/api";
-const CONVERSATIONS_API = `${API_BASE}/conversations`;
-const DOCUMENTS_API = `${API_BASE}/documents`;
+const DOCUMENTS_API = "/documents";
 
 // ─── 组件 ────────────────────────────────────────────────────────────
 
 export function ChatPage() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
-  const [currentConversationId, setCurrentConversationId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const conversations = useChatStore((s) => s.conversations);
+  const conversationsLoading = useChatStore((s) => s.conversationsLoading);
+  const currentConversationId = useChatStore((s) => s.currentConversationId);
+  const messages = useChatStore((s) => s.messages);
+  const boundDocumentIds = useChatStore((s) => s.boundDocumentIds);
+  const fetchConversations = useChatStore((s) => s.fetchConversations);
+  const loadConversation = useChatStore((s) => s.loadConversation);
+  const newChat = useChatStore((s) => s.newChat);
+  const deleteConversation = useChatStore((s) => s.deleteConversation);
+
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [conversationsLoading, setConversationsLoading] = useState(true);
   const [docPickerOpen, setDocPickerOpen] = useState(false);
   const [allDocuments, setAllDocuments] = useState<DocumentItem[]>([]);
-  const [boundDocumentIds, setBoundDocumentIds] = useState<Set<string>>(new Set());
   const [docPickerLoading, setDocPickerLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const rafIdRef = useRef<number | null>(null);
   const pendingChunksRef = useRef<string[]>([]);
   const assistantIdRef = useRef<string>("");
 
-  const fetchConversations = useCallback(async () => {
-    setConversationsLoading(true);
-    try {
-      const res = await fetch(CONVERSATIONS_API);
-      if (!res.ok) throw new Error("获取会话列表失败");
-      const data = (await res.json()) as Conversation[];
-      setConversations(data);
-    } catch (e) {
-      console.error("fetchConversations:", e);
-    } finally {
-      setConversationsLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     fetchConversations();
   }, [fetchConversations]);
 
-  const loadConversation = useCallback(async (id: string) => {
-    setCurrentConversationId(id);
-    setError(null);
-    try {
-      const res = await fetch(`${CONVERSATIONS_API}/${id}/messages`);
-      if (!res.ok) throw new Error("加载消息失败");
-      const list = (await res.json()) as Array<{ id: string; role: string; content: string; citations?: Citation[] }>;
-      setMessages(
-        list.map((m) => ({
-          id: m.id,
-          role: m.role as "user" | "assistant",
-          content: m.content,
-          citations: m.citations as Citation[] | undefined,
-        }))
-      );
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "加载失败");
-      setMessages([]);
-    }
-
-    // 同步加载会话绑定文档（用于默认 RAG 过滤）
-    try {
-      const docsRes = await fetch(`${CONVERSATIONS_API}/${id}/documents`);
-      if (docsRes.ok) {
-        const json = (await docsRes.json()) as { document_ids?: string[] };
-        const ids = Array.isArray(json.document_ids) ? json.document_ids.filter((x) => typeof x === "string") : [];
-        setBoundDocumentIds(new Set(ids));
-      } else {
-        setBoundDocumentIds(new Set());
-      }
-    } catch {
-      setBoundDocumentIds(new Set());
-    }
-  }, []);
-
   const handleNewChat = useCallback(() => {
-    setCurrentConversationId(null);
-    setMessages([]);
+    newChat();
     setError(null);
-    setBoundDocumentIds(new Set());
-  }, []);
+  }, [newChat]);
 
   const openDocPicker = useCallback(async () => {
     if (!currentConversationId) return;
@@ -134,18 +65,14 @@ export function ChatPage() {
     setDocPickerLoading(true);
     try {
       const [docsRes, boundRes] = await Promise.all([
-        fetch(DOCUMENTS_API),
-        fetch(`${CONVERSATIONS_API}/${currentConversationId}/documents`),
+        api.get(DOCUMENTS_API),
+        api.get(`/conversations/${currentConversationId}/documents`),
       ]);
-      if (docsRes.ok) {
-        const docs = (await docsRes.json()) as DocumentItem[];
-        setAllDocuments(Array.isArray(docs) ? docs : []);
-      }
-      if (boundRes.ok) {
-        const json = (await boundRes.json()) as { document_ids?: string[] };
-        const ids = Array.isArray(json.document_ids) ? json.document_ids.filter((x) => typeof x === "string") : [];
-        setBoundDocumentIds(new Set(ids));
-      }
+      const docs = docsRes.data as DocumentItem[];
+      setAllDocuments(Array.isArray(docs) ? docs : []);
+      const ids = (boundRes.data as { document_ids?: string[] }).document_ids ?? [];
+      // boundDocumentIds 已由 store 维护，这里不额外 set；只保证弹层显示更新
+      void ids;
     } finally {
       setDocPickerLoading(false);
     }
@@ -159,23 +86,12 @@ export function ChatPage() {
       try {
         const currentlyBound = boundDocumentIds.has(docId);
         if (currentlyBound) {
-          const res = await fetch(`${CONVERSATIONS_API}/${currentConversationId}/documents/${docId}`, { method: "DELETE" });
-          if (!res.ok) throw new Error("取消关联失败");
+          await api.delete(`/conversations/${currentConversationId}/documents/${docId}`);
         } else {
-          const res = await fetch(`${CONVERSATIONS_API}/${currentConversationId}/documents`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ document_id: docId }),
-          });
-          if (!res.ok) throw new Error("关联失败");
+          await api.post(`/conversations/${currentConversationId}/documents`, { document_id: docId });
         }
-
-        const boundRes = await fetch(`${CONVERSATIONS_API}/${currentConversationId}/documents`);
-        if (boundRes.ok) {
-          const json = (await boundRes.json()) as { document_ids?: string[] };
-          const ids = Array.isArray(json.document_ids) ? json.document_ids.filter((x) => typeof x === "string") : [];
-          setBoundDocumentIds(new Set(ids));
-        }
+        // 重新加载绑定集合（后端已更新）
+        await useChatStore.getState().refreshBoundDocs(currentConversationId);
       } catch (e) {
         setError(e instanceof Error ? e.message : "操作失败");
       } finally {
@@ -190,18 +106,12 @@ export function ChatPage() {
       e.stopPropagation();
       if (!window.confirm("确定删除该会话？")) return;
       try {
-        const res = await fetch(`${CONVERSATIONS_API}/${id}`, { method: "DELETE" });
-        if (!res.ok) throw new Error("删除失败");
-        if (currentConversationId === id) {
-          setCurrentConversationId(null);
-          setMessages([]);
-        }
-        setConversations((prev) => prev.filter((c) => c.id !== id));
+        await deleteConversation(id);
       } catch (err) {
         setError(err instanceof Error ? err.message : "删除失败");
       }
     },
-    [currentConversationId]
+    [deleteConversation]
   );
 
   const formatConversationDate = (dateStr: string) => {
@@ -221,12 +131,13 @@ export function ChatPage() {
     if (pendingChunksRef.current.length === 0) return;
     const chunks = pendingChunksRef.current.splice(0);
     const text = chunks.join("");
-    setMessages((prev) => {
+    useChatStore.setState((s) => {
+      const prev = s.messages;
       const last = prev[prev.length - 1];
       if (last?.role === "assistant" && last.streaming) {
-        return [...prev.slice(0, -1), { ...last, content: last.content + text }];
+        return { messages: [...prev.slice(0, -1), { ...last, content: last.content + text }] };
       }
-      return prev;
+      return { messages: prev };
     });
   }, []);
 
@@ -258,12 +169,12 @@ export function ChatPage() {
     setError(null);
 
     const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
+    useChatStore.setState((s) => ({ messages: [...s.messages, userMsg] }));
 
     const assistantId = crypto.randomUUID();
     assistantIdRef.current = assistantId;
     const assistantMsg: Message = { id: assistantId, role: "assistant", content: "", streaming: true };
-    setMessages((prev) => [...prev, assistantMsg]);
+    useChatStore.setState((s) => ({ messages: [...s.messages, assistantMsg] }));
 
     setLoading(true);
     pendingChunksRef.current = [];
@@ -281,19 +192,37 @@ export function ChatPage() {
         }
       }
 
-      const res = await fetch(`${API_BASE}/chat`, {
+      const accessToken = useAuthStore.getState().accessToken;
+
+      // SSE 请求必须显式携带 Authorization（fetch 不走 axios 拦截器）
+      const doChatFetch = async () =>
+        fetch(`/api/chat`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: [
-            ...messages.map((m) => ({ role: m.role, content: m.content })),
-            { role: "user" as const, content: text },
-          ],
-          ...(queryEmbedding ? { queryEmbedding } : {}),
-          ...(currentConversationId ? { conversation_id: currentConversationId } : {}),
-          // 方案 B：前端不显式传 document_ids；由后端根据会话绑定文档决定过滤范围
-        }),
-      });
+          headers: {
+            "Content-Type": "application/json",
+            ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+          },
+          body: JSON.stringify({
+            messages: [
+              ...messages.map((m) => ({ role: m.role, content: m.content })),
+              { role: "user" as const, content: text },
+            ],
+            ...(queryEmbedding ? { queryEmbedding } : {}),
+            ...(currentConversationId ? { conversation_id: currentConversationId } : {}),
+            // 方案 B：前端不显式传 document_ids；由后端根据会话绑定文档决定过滤范围
+          }),
+        });
+
+      let res = await doChatFetch();
+      // 如果 access token 过期：尝试走 refresh（axios 队列+并发锁），拿新 token 后重试一次
+      if (res.status === 401) {
+        try {
+          await api.post("/auth/refresh");
+          res = await doChatFetch();
+        } catch {
+          // ignore，后续会走通用错误提示
+        }
+      }
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: res.statusText }));
@@ -323,18 +252,16 @@ export function ChatPage() {
             const json = JSON.parse(data);
 
             if (json.type === "conversation_id" && typeof json.id === "string") {
-              setCurrentConversationId(json.id);
+              useChatStore.setState({ currentConversationId: json.id });
               fetchConversations();
               continue;
             }
 
             if (json.type === "citations") {
               const citations = json.chunks as Citation[];
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === assistantId ? { ...m, citations } : m
-                )
-              );
+              useChatStore.setState((s) => ({
+                messages: s.messages.map((m) => (m.id === assistantId ? { ...m, citations } : m)),
+              }));
               continue;
             }
 
@@ -358,17 +285,15 @@ export function ChatPage() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "未知错误");
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantId ? { ...m, content: "（请求失败）", streaming: false } : m
-        )
-      );
+      useChatStore.setState((s) => ({
+        messages: s.messages.map((m) => (m.id === assistantId ? { ...m, content: "（请求失败）", streaming: false } : m)),
+      }));
     } finally {
       stopStreaming();
       setLoading(false);
-      setMessages((prev) =>
-        prev.map((m) => (m.id === assistantId ? { ...m, streaming: false } : m))
-      );
+      useChatStore.setState((s) => ({
+        messages: s.messages.map((m) => (m.id === assistantId ? { ...m, streaming: false } : m)),
+      }));
       scrollToBottom();
     }
   };

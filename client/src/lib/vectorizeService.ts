@@ -4,8 +4,7 @@
  */
 
 import { embedBatch } from "./embeddingClient.js";
-
-const API_BASE = "/api/documents";
+import { api } from "./apiClient.js";
 
 export interface ParseChunk {
   content: string;
@@ -37,12 +36,8 @@ function buildEnrichedText(docId: string, docType: string, chunk: ParseChunk): s
 
 export async function vectorizeDocument(documentId: string): Promise<VectorizeResult> {
   try {
-    const parseRes = await fetch(`${API_BASE}/${documentId}/parse`);
-    if (!parseRes.ok) {
-      const json = await parseRes.json().catch(() => ({}));
-      return { ok: false, error: json.error ?? "解析失败" };
-    }
-    const { chunks, document_id, document_type, document_name } = (await parseRes.json()) as {
+    const parseRes = await api.get(`/documents/${documentId}/parse`);
+    const { chunks, document_id, document_type, document_name } = parseRes.data as {
       chunks: ParseChunk[];
       document_id?: string;
       document_type?: string;
@@ -89,16 +84,8 @@ export async function vectorizeDocument(documentId: string): Promise<VectorizeRe
       };
     });
 
-    const postRes = await fetch(`${API_BASE}/${documentId}/chunks`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ chunks: payload }),
-    });
-    if (!postRes.ok) {
-      const json = await postRes.json().catch(() => ({}));
-      return { ok: false, error: json.error ?? "提交失败" };
-    }
-    const json = (await postRes.json()) as { count?: number; total_vectors?: number };
+    const postRes = await api.post(`/documents/${documentId}/chunks`, { chunks: payload });
+    const json = postRes.data as { count?: number; total_vectors?: number };
     return { ok: true, count: json.count ?? chunks.length, total_vectors: json.total_vectors };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "向量化失败" };
