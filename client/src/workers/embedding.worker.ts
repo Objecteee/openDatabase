@@ -10,6 +10,8 @@
 import { pipeline, env, type FeatureExtractionPipeline } from "@huggingface/transformers";
 
 // ─── 环境配置（必须在 pipeline() 调用前完成）───
+// WASM 使用 jsdelivr CDN：避免 jsdmirror 在部分网络下无法拉取导致
+// "Failed to fetch dynamically imported module: ... ort-wasm-simd-threaded.jsep.mjs" 与 "no available backend found"
 
 env.allowLocalModels = false;
 
@@ -17,7 +19,7 @@ const onnxEnv = env.backends.onnx as Record<string, Record<string, unknown>>;
 if (onnxEnv?.wasm) {
   onnxEnv.wasm.numThreads = 1;
   onnxEnv.wasm.wasmPaths =
-    "https://cdn.jsdmirror.com/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/";
+    "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0-dev.20250409-89f8206ba4/dist/";
 }
 
 // ─── 单例 Pipeline ───

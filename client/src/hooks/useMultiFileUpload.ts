@@ -19,7 +19,8 @@ export interface UploadItem {
 
 const MAX_CONCURRENT = 2;
 
-export function useMultiFileUpload(onItemDone?: () => void) {
+/** 单个上传项完成时调用，若上传成功则传入新文档 ID */
+export function useMultiFileUpload(onItemDone?: (documentId?: string) => void) {
   const [items, setItems] = useState<UploadItem[]>([]);
   const onItemDoneRef = useRef(onItemDone);
   onItemDoneRef.current = onItemDone;
@@ -46,10 +47,11 @@ export function useMultiFileUpload(onItemDone?: () => void) {
         .then((result) => {
           if (result.documentId) {
             updateItem(item.id, { phase: "done", progress: 1, documentId: result.documentId });
+            onItemDoneRef.current?.(result.documentId);
           } else {
             updateItem(item.id, { phase: "error", progress: 0, error: result.error });
+            onItemDoneRef.current?.();
           }
-          onItemDoneRef.current?.();
         })
         .catch((e) => {
           updateItem(item.id, {

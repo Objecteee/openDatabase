@@ -8,6 +8,7 @@ import { useEmbeddingModel } from "../hooks/useEmbeddingModel.js";
 import { useMultiFileUpload } from "../hooks/useMultiFileUpload.js";
 import { MultiFileUploadZone } from "../components/MultiFileUploadZone.js";
 import { DocumentList } from "../components/DocumentList.js";
+import { vectorizeDocument } from "../lib/vectorizeService.js";
 
 const INITIALIZING_DELAY_MS = 2000;
 const TIMEOUT_MS = 60_000;
@@ -18,8 +19,12 @@ type LoadPhase = "downloading" | "initializing" | "timeout";
 export function DocumentsPage() {
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const { isReady, isError, progress, currentFile, error, retry } = useEmbeddingModel();
-  const { items, addFiles, removeItem, clearCompleted } = useMultiFileUpload(() => {
+  // 上传成功（含直传、分片、秒传）后必触发一次自动向量化，不区分文件类型；解析失败则文档保持 pending 可手动重试
+  const { items, addFiles, removeItem, clearCompleted } = useMultiFileUpload((documentId) => {
     setRefreshTrigger((t) => t + 1);
+    if (documentId) {
+      vectorizeDocument(documentId).finally(() => setRefreshTrigger((t) => t + 1));
+    }
   });
   const [phase, setPhase] = useState<LoadPhase>("downloading");
   const highProgressSinceRef = useRef<number | null>(null);
