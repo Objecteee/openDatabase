@@ -104,9 +104,16 @@ router.post("/auth/refresh", async (req: Request, res: Response) => {
     res.cookie(cookieName, rotated.newRefreshToken, refreshCookieOptions());
     res.json({ user: rotated.user, access_token: rotated.accessToken, expires_in: rotated.accessExpiresIn });
   } catch (e) {
-    res.clearCookie(cookieName, refreshCookieOptions());
     const err = getErrMessage(e);
     console.error("[auth/refresh] error:", err);
+
+    const fatal = ["无效", "不存在", "已吊销", "已过期", "invalid", "expired"].some(
+      (k) => err.message.toLowerCase().includes(k),
+    );
+    if (fatal) {
+      res.clearCookie(cookieName, refreshCookieOptions());
+    }
+
     res.status(401).json({ error: err.message || "刷新失败" });
   }
 });

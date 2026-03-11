@@ -117,6 +117,8 @@ export async function revokeRefreshToken(refreshToken: string): Promise<void> {
   if (error) throw error;
 }
 
+const REVOKE_GRACE_PERIOD_MS = 60_000;
+
 export async function verifyAndRotateRefreshToken(refreshToken: string): Promise<{
   user: AuthUser;
   newRefreshToken: string;
@@ -138,15 +140,24 @@ export async function verifyAndRotateRefreshToken(refreshToken: string): Promise
     .maybeSingle();
   if (error) throw error;
   if (!row) throw new Error("refresh token 不存在");
-  if ((row as { revoked_at?: string | null }).revoked_at) throw new Error("refresh token 已吊销");
+
+  const revokedAt = (row as { revoked_at?: string | null }).revoked_at;
+  if (revokedAt) {
+    const revokedMs = new Date(revokedAt).getTime();
+    if (Date.now() - revokedMs > REVOKE_GRACE_PERIOD_MS) {
+      throw new Error("refresh token 已吊销");
+    }
+  }
+
   if (new Date(String((row as { expires_at: string }).expires_at)).getTime() < Date.now()) throw new Error("refresh token 已过期");
 
-  // 吊销旧 token（轮换）
-  const revokeErr = await supabase
-    .from("refresh_tokens")
-    .update({ revoked_at: nowIso() })
-    .eq("id", String((row as { id: string }).id));
-  if (revokeErr.error) throw revokeErr.error;
+  if (!revokedAt) {
+    const revokeErr = await supabase
+      .from("refresh_tokens")
+      .update({ revoked_at: nowIso() })
+      .eq("id", String((row as { id: string }).id));
+    if (revokeErr.error) throw revokeErr.error;
+  }
 
   const { data: userRow, error: userErr } = await supabase
     .from("users")

@@ -17,6 +17,8 @@ interface DocumentsState {
   fetchDocs: () => Promise<void>;
   deleteDoc: (id: string) => Promise<void>;
   getPreviewUrl: (id: string) => Promise<string | null>;
+  /** 本地乐观更新：用于自动向量化时立刻禁用按钮/更新状态 */
+  setDocStatus: (id: string, status: string) => void;
 }
 
 export const useDocumentsStore = create<DocumentsState>((set, get) => ({
@@ -44,6 +46,12 @@ export const useDocumentsStore = create<DocumentsState>((set, get) => ({
     const res = await api.get(`/documents/${id}/url`);
     const url = (res.data as { url?: string }).url ?? null;
     return url;
+  },
+
+  setDocStatus: (id: string, status: string) => {
+    set({
+      docs: get().docs.map((d) => (d.id === id ? { ...d, status } : d)),
+    });
   },
 }));
 

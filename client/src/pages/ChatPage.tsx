@@ -39,8 +39,10 @@ export function ChatPage() {
   const boundDocumentIds = useChatStore((s) => s.boundDocumentIds);
   const fetchConversations = useChatStore((s) => s.fetchConversations);
   const loadConversation = useChatStore((s) => s.loadConversation);
+  const createConversation = useChatStore((s) => s.createConversation);
   const newChat = useChatStore((s) => s.newChat);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
+  const renameConversation = useChatStore((s) => s.renameConversation);
 
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -49,6 +51,7 @@ export function ChatPage() {
   const [allDocuments, setAllDocuments] = useState<DocumentItem[]>([]);
   const [docPickerLoading, setDocPickerLoading] = useState(false);
   const [conversationsOpen, setConversationsOpen] = useState(false);
+  const [creatingConversation, setCreatingConversation] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const rafIdRef = useRef<number | null>(null);
   const pendingChunksRef = useRef<string[]>([]);
@@ -74,13 +77,21 @@ export function ChatPage() {
   }, [newChat]);
 
   const openDocPicker = useCallback(async () => {
-    if (!currentConversationId) return;
+    let conversationId = currentConversationId;
+    if (!conversationId) {
+      setCreatingConversation(true);
+      try {
+        conversationId = await createConversation();
+      } finally {
+        setCreatingConversation(false);
+      }
+    }
     setDocPickerOpen(true);
     setDocPickerLoading(true);
     try {
       const [docsRes, boundRes] = await Promise.all([
         api.get(DOCUMENTS_API),
-        api.get(`/conversations/${currentConversationId}/documents`),
+        api.get(`/conversations/${conversationId}/documents`),
       ]);
       const docs = docsRes.data as DocumentItem[];
       setAllDocuments(Array.isArray(docs) ? docs : []);
@@ -90,7 +101,25 @@ export function ChatPage() {
     } finally {
       setDocPickerLoading(false);
     }
-  }, [currentConversationId]);
+  }, [createConversation, currentConversationId]);
+
+  const handleRenameConversation = useCallback(
+    async (id: string, currentTitle: string | null, e: React.MouseEvent) => {
+      e.stopPropagation();
+      const next = window.prompt("重命名会话", currentTitle?.trim() || t("chat.newChat"));
+      if (next == null) return;
+      const title = next.trim();
+      if (!title) return;
+      try {
+        await renameConversation(id, title);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "重命名失败");
+      } finally {
+        setConversationsOpen(false);
+      }
+    },
+    [renameConversation, t]
+  );
 
   const toggleBoundDocument = useCallback(
     async (docId: string) => {
@@ -351,6 +380,14 @@ export function ChatPage() {
                     </span>
                     <button
                       type="button"
+                      onClick={(e) => handleRenameConversation(c.id, c.title, e)}
+                      className={styles.convRename}
+                      title="重命名"
+                    >
+                      ✎
+                    </button>
+                    <button
+                      type="button"
                       onClick={(e) => handleDeleteConversation(c.id, e)}
                       className={styles.convDelete}
                       title={t("app.common.delete")}
@@ -388,10 +425,10 @@ export function ChatPage() {
           <div>
             <button
               type="button"
-              disabled={!currentConversationId}
+              disabled={docPickerLoading || creatingConversation}
               onClick={openDocPicker}
               className={styles.toolbarBtn}
-              title={!currentConversationId ? t("chat.toolbar.noConversation") : t("chat.toolbar.bindDocs")}
+              title={t("chat.toolbar.bindDocs")}
             >
               {t("chat.toolbar.bindDocs")}
             </button>
@@ -425,9 +462,9 @@ export function ChatPage() {
 
             {/* 引用来源卡片（仅 assistant 消息，有 citations 时展示）*/}
             {msg.role === "assistant" && msg.citations && msg.citations.length > 0 && (
-              <div className="mt-2 max-w-[80%] w-full">
-                <p className="text-xs text-slate-400 mb-1 px-1">{t("chat.citations.title")}</p>
-                <div className="flex flex-col gap-1.5">
+              <div className={styles.citationsWrap}>
+                <p className={styles.citationsTitle}>{t("chat.citations.title")}</p>
+                <div className={styles.citationsList}>
                   {msg.citations.map((c, idx) => (
                     <CitationCard key={c.id} index={idx + 1} citation={c} />
                   ))}
@@ -579,6 +616,22 @@ export function ChatPage() {
                           {c.title?.trim() || t("chat.newChat")}
                         </span>
                         <span className={styles.convMeta}>{formatConversationDate(c.updated_at)}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => handleRenameConversation(c.id, c.title, e)}
+                          className={styles.convRename}
+                          title="重命名"
+                        >
+                          ✎
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteConversation(c.id, e)}
+                          className={styles.convDelete}
+                          title={t("app.common.delete")}
+                        >
+                          ×
+                        </button>
                       </div>
                     </li>
                   ))}
@@ -624,6 +677,7 @@ function buildPdfPageUrl(fileUrl: string, pointer: string): string {
 
 function CitationCard({ index, citation }: CitationCardProps) {
   const [expanded, setExpanded] = useState(false);
+  const { t } = useTranslation();
 
   const summary = (citation.metadata?.summary ?? citation.document_name) as string | undefined;
   const keywords = citation.metadata?.keywords as string[] | undefined;
@@ -646,68 +700,57 @@ function CitationCard({ index, citation }: CitationCardProps) {
   };
 
   return (
-    <div className="w-full bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
-      {/* 卡片头部：序号 + 文档名 + pointer + 展开/跳转按钮 */}
+    <div className={styles.citationCard}>
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
-        className="w-full text-left px-3 py-2 hover:bg-slate-100 transition-colors"
+        className={styles.citationHeader}
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-xs font-medium flex items-center justify-center">
-              {index}
-            </span>
-            <div className="min-w-0">
-              {/* 文档名 */}
-              <p className="text-xs font-medium text-slate-700 truncate">
-                {document_name ?? summary ?? "未知文档"}
-              </p>
-              {/* pointer：页码或时间戳 */}
-              {pointer && (
-                <p className="text-xs text-indigo-500 mt-0.5">
-                  {pointerIcon(pointer)}&nbsp;
-                  {pointer.startsWith("p.") ? `第 ${pointer.slice(2)} 页` : pointer}
-                </p>
-              )}
+        <span className={styles.citationIndex}>{index}</span>
+
+        <div className={styles.citationMain}>
+          <p className={styles.citationDocName}>
+            {document_name ?? summary ?? t("chat.citations.unknownDoc")}
+          </p>
+
+          {pointer && (
+            <p className={styles.citationPointer}>
+              {pointerIcon(pointer)}{" "}
+              {pointer.startsWith("p.")
+                ? t("chat.citations.page", { page: pointer.slice(2) })
+                : pointer}
+            </p>
+          )}
+
+          {keywords && keywords.length > 0 && (
+            <div className={styles.citationTags}>
+              {keywords.slice(0, 4).map((kw) => (
+                <span key={kw} className={styles.tag}>
+                  {kw}
+                </span>
+              ))}
             </div>
-          </div>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {/* 跳转源文件按钮 */}
-            {jumpUrl && (
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={handleOpenSource}
-                onKeyDown={(e) => e.key === "Enter" && handleOpenSource(e as unknown as React.MouseEvent)}
-                title={pointer?.startsWith("p.") ? "打开源文件" : "跳转到对应时间点"}
-                className="text-xs text-indigo-400 hover:text-indigo-600 px-1.5 py-0.5 rounded hover:bg-indigo-50 transition-colors cursor-pointer"
-              >
-                {pointer?.startsWith("p.") ? "查看原文 ↗" : "跳转 ↗"}
-              </span>
-            )}
-            <span className="text-slate-400 text-xs">{expanded ? "▲" : "▼"}</span>
-          </div>
+          )}
         </div>
 
-        {/* 关键词标签 */}
-        {keywords && keywords.length > 0 && (
-          <div className="mt-1 flex flex-wrap gap-1 pl-7">
-            {keywords.slice(0, 4).map((kw) => (
-              <span key={kw} className="text-xs bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded">
-                {kw}
-              </span>
-            ))}
-          </div>
-        )}
+        <span className={styles.citationActions}>
+          {jumpUrl && (
+            <button
+              type="button"
+              onClick={handleOpenSource}
+              className={styles.openBtn}
+              title={pointer?.startsWith("p.") ? t("chat.citations.open") : t("chat.citations.jump")}
+            >
+              {pointer?.startsWith("p.") ? t("chat.citations.open") : t("chat.citations.jump")}
+            </button>
+          )}
+          <span className={`${styles.chevron} ${expanded ? styles.chevronExpanded : ""}`}>▾</span>
+        </span>
       </button>
 
-      {/* 展开内容：chunk 原文 */}
       {expanded && (
-        <div className="px-3 pb-3 pt-1 border-t border-slate-200">
-          <p className="pl-7 text-xs text-slate-500 whitespace-pre-wrap leading-relaxed">
-            {citation.content}
-          </p>
+        <div className={styles.citationBody}>
+          <p className={styles.citationContent}>{citation.content}</p>
         </div>
       )}
     </div>

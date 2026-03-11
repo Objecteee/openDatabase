@@ -9,6 +9,7 @@ import { useMultiFileUpload } from "../hooks/useMultiFileUpload.js";
 import { MultiFileUploadZone } from "../components/MultiFileUploadZone.js";
 import { DocumentList } from "../components/DocumentList.js";
 import { vectorizeDocument } from "../lib/vectorizeService.js";
+import { useDocumentsStore } from "../stores/documentsStore.js";
 import { useTranslation } from "react-i18next";
 import styles from "./DocumentsPage.module.scss";
 
@@ -22,10 +23,13 @@ export function DocumentsPage() {
   const { t } = useTranslation();
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const { isReady, isError, progress, currentFile, error, retry } = useEmbeddingModel();
+  const setDocStatus = useDocumentsStore((s) => s.setDocStatus);
   // 上传成功（含直传、分片、秒传）后必触发一次自动向量化，不区分文件类型；解析失败则文档保持 pending 可手动重试
   const { items, addFiles, removeItem, clearCompleted } = useMultiFileUpload((documentId) => {
     setRefreshTrigger((t) => t + 1);
     if (documentId) {
+      // 自动向量化开始：立刻把该文档状态置为 processing，避免用户重复点击“向量化”
+      setDocStatus(documentId, "processing");
       vectorizeDocument(documentId).finally(() => setRefreshTrigger((t) => t + 1));
     }
   });

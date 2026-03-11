@@ -25,6 +25,11 @@ body {
     center,
     center;
   color: var(--color-text-900);
+  overflow: hidden;
+}
+
+#root {
+  height: 100%;
 }
 
 /* Improve tap targets on mobile */

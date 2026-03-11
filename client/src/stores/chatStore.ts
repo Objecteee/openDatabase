@@ -35,8 +35,10 @@ interface ChatState {
 
   fetchConversations: () => Promise<void>;
   loadConversation: (id: string) => Promise<void>;
+  createConversation: () => Promise<string>;
   newChat: () => void;
   deleteConversation: (id: string) => Promise<void>;
+  renameConversation: (id: string, title: string) => Promise<void>;
 
   refreshBoundDocs: (conversationId: string) => Promise<void>;
   setBoundDocs: (ids: string[]) => void;
@@ -87,6 +89,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
     await get().refreshBoundDocs(id);
   },
 
+  createConversation: async () => {
+    const res = await api.post("/conversations", {});
+    const id = (res.data as { id?: string }).id;
+    if (typeof id !== "string" || !id) throw new Error("创建会话失败");
+    set({ currentConversationId: id, messages: [], boundDocumentIds: new Set() });
+    await get().fetchConversations();
+    await get().refreshBoundDocs(id);
+    return id;
+  },
+
   newChat: () => set({ currentConversationId: null, messages: [], boundDocumentIds: new Set() }),
 
   deleteConversation: async (id: string) => {
@@ -95,6 +107,15 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({
       conversations: get().conversations.filter((c) => c.id !== id),
       ...(cur === id ? { currentConversationId: null, messages: [], boundDocumentIds: new Set() } : {}),
+    });
+  },
+
+  renameConversation: async (id: string, title: string) => {
+    const next = title.trim().slice(0, 200);
+    if (!next) throw new Error("标题不能为空");
+    await api.patch(`/conversations/${id}`, { title: next });
+    set({
+      conversations: get().conversations.map((c) => (c.id === id ? { ...c, title: next } : c)),
     });
   },
 }));
