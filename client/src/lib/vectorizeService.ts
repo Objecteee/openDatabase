@@ -10,6 +10,8 @@ const API_BASE = "/api/documents";
 export interface ParseChunk {
   content: string;
   chunk_index: number;
+  /** 溯源指针：PDF 页码（"p.3"）或视频/音频时间戳（"00:01:23"），无则为 null */
+  pointer?: string | null;
   metadata?: Record<string, unknown>;
   summary?: string;
   keywords?: string[];
@@ -40,15 +42,17 @@ export async function vectorizeDocument(documentId: string): Promise<VectorizeRe
       const json = await parseRes.json().catch(() => ({}));
       return { ok: false, error: json.error ?? "解析失败" };
     }
-    const { chunks, document_id, document_type } = (await parseRes.json()) as {
+    const { chunks, document_id, document_type, document_name } = (await parseRes.json()) as {
       chunks: ParseChunk[];
       document_id?: string;
       document_type?: string;
+      document_name?: string;
     };
     if (!chunks?.length) return { ok: false, error: "无有效切片" };
 
     const docId = document_id ?? documentId;
     const docType = document_type ?? "txt";
+    const docName = document_name ?? "";
 
     // 为每个 chunk 构造 3 个向量输入：enriched + q1 + q2
     const textsToEmbed: string[] = [];
@@ -68,7 +72,14 @@ export async function vectorizeDocument(documentId: string): Promise<VectorizeRe
       return {
         chunk_index: c.chunk_index,
         content: c.content,
-        metadata: c.metadata ?? {},
+        // 将语义增强字段和溯源字段写入 metadata，供检索后 citations 事件使用
+        metadata: {
+          ...(c.metadata ?? {}),
+          summary: c.summary ?? null,
+          keywords: c.keywords ?? [],
+          pointer: c.pointer ?? null,
+          document_name: docName,
+        },
         chunk_group_id: chunkGroupId,
         embeddings: [
           { type: "enriched_main" as const, embedding: allEmbeddings[base] ?? [] },

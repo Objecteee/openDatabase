@@ -289,7 +289,7 @@ router.get("/:id/parse", async (req: Request, res: Response) => {
 
     await updateDocumentStatus(id, "processing");
     const { chunks } = await parseDocument(id, doc.storage_path, doc.type);
-    res.json({ chunks, document_id: id, document_type: doc.type });
+    res.json({ chunks, document_id: id, document_type: doc.type, document_name: doc.name });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "解析失败";
     try {

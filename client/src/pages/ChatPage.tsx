@@ -21,6 +21,12 @@ interface Citation {
   document_id: string;
   content: string;
   metadata: Record<string, unknown>;
+  /** 文档名称（冗余字段，直接从 metadata.document_name 提升） */
+  document_name: string | null;
+  /** 溯源指针：PDF 页码（"p.3"）或视频/音频时间戳（"00:01:23"） */
+  pointer: string | null;
+  /** 源文件签名 URL，可直接在新标签页打开 */
+  file_url: string | null;
 }
 
 interface Message {
@@ -279,44 +285,117 @@ interface CitationCardProps {
   citation: Citation;
 }
 
+/** 根据 pointer 格式判断图标：页码 → 📄，时间戳 → 🕐，无 → 📎 */
+function pointerIcon(pointer: string | null): string {
+  if (!pointer) return "📎";
+  if (pointer.startsWith("p.")) return "📄";
+  return "🕐";
+}
+
+/** 将时间戳 pointer 转为视频/音频 URL hash（#t=秒数），供浏览器跳转 */
+function buildTimestampUrl(fileUrl: string, pointer: string): string {
+  const parts = pointer.split(":");
+  if (parts.length !== 3) return fileUrl;
+  const [h, m, s] = parts.map(Number);
+  const totalSec = (h ?? 0) * 3600 + (m ?? 0) * 60 + (s ?? 0);
+  return `${fileUrl}#t=${totalSec}`;
+}
+
+/** 将 PDF 页码 pointer（"p.3"）转为带 #page=N 的 URL，Chrome 内置阅读器支持跳转 */
+function buildPdfPageUrl(fileUrl: string, pointer: string): string {
+  const pageNum = parseInt(pointer.slice(2), 10);
+  if (isNaN(pageNum)) return fileUrl;
+  return `${fileUrl}#page=${pageNum}`;
+}
+
 function CitationCard({ index, citation }: CitationCardProps) {
   const [expanded, setExpanded] = useState(false);
-  const summary = citation.metadata?.summary as string | undefined;
+
+  const summary = (citation.metadata?.summary ?? citation.document_name) as string | undefined;
   const keywords = citation.metadata?.keywords as string[] | undefined;
+  const { document_name, pointer, file_url } = citation;
+
+  // 构造跳转 URL：
+  //   视频/音频时间戳 → #t=秒数（所有浏览器支持）
+  //   PDF 页码       → #page=N（Chrome 内置 PDF 阅读器支持，其他浏览器打开文件首页）
+  //   其他           → 直接打开文件
+  const jumpUrl = (() => {
+    if (!file_url) return null;
+    if (!pointer) return file_url;
+    if (pointer.startsWith("p.")) return buildPdfPageUrl(file_url, pointer);
+    return buildTimestampUrl(file_url, pointer);
+  })();
+
+  const handleOpenSource = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (jumpUrl) window.open(jumpUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
-    <button
-      type="button"
-      onClick={() => setExpanded((v) => !v)}
-      className="w-full text-left bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 hover:bg-slate-100 transition-colors"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-xs font-medium flex items-center justify-center">
-            {index}
-          </span>
-          <span className="text-xs text-slate-600 truncate">
-            {summary ?? citation.content.slice(0, 60)}
-          </span>
-        </div>
-        <span className="flex-shrink-0 text-slate-400 text-xs">{expanded ? "▲" : "▼"}</span>
-      </div>
-
-      {keywords && keywords.length > 0 && (
-        <div className="mt-1 flex flex-wrap gap-1 pl-7">
-          {keywords.slice(0, 4).map((kw) => (
-            <span key={kw} className="text-xs bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded">
-              {kw}
+    <div className="w-full bg-slate-50 border border-slate-200 rounded-lg overflow-hidden">
+      {/* 卡片头部：序号 + 文档名 + pointer + 展开/跳转按钮 */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full text-left px-3 py-2 hover:bg-slate-100 transition-colors"
+      >
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-xs font-medium flex items-center justify-center">
+              {index}
             </span>
-          ))}
+            <div className="min-w-0">
+              {/* 文档名 */}
+              <p className="text-xs font-medium text-slate-700 truncate">
+                {document_name ?? summary ?? "未知文档"}
+              </p>
+              {/* pointer：页码或时间戳 */}
+              {pointer && (
+                <p className="text-xs text-indigo-500 mt-0.5">
+                  {pointerIcon(pointer)}&nbsp;
+                  {pointer.startsWith("p.") ? `第 ${pointer.slice(2)} 页` : pointer}
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {/* 跳转源文件按钮 */}
+            {jumpUrl && (
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={handleOpenSource}
+                onKeyDown={(e) => e.key === "Enter" && handleOpenSource(e as unknown as React.MouseEvent)}
+                title={pointer?.startsWith("p.") ? "打开源文件" : "跳转到对应时间点"}
+                className="text-xs text-indigo-400 hover:text-indigo-600 px-1.5 py-0.5 rounded hover:bg-indigo-50 transition-colors cursor-pointer"
+              >
+                {pointer?.startsWith("p.") ? "查看原文 ↗" : "跳转 ↗"}
+              </span>
+            )}
+            <span className="text-slate-400 text-xs">{expanded ? "▲" : "▼"}</span>
+          </div>
+        </div>
+
+        {/* 关键词标签 */}
+        {keywords && keywords.length > 0 && (
+          <div className="mt-1 flex flex-wrap gap-1 pl-7">
+            {keywords.slice(0, 4).map((kw) => (
+              <span key={kw} className="text-xs bg-indigo-50 text-indigo-500 px-1.5 py-0.5 rounded">
+                {kw}
+              </span>
+            ))}
+          </div>
+        )}
+      </button>
+
+      {/* 展开内容：chunk 原文 */}
+      {expanded && (
+        <div className="px-3 pb-3 pt-1 border-t border-slate-200">
+          <p className="pl-7 text-xs text-slate-500 whitespace-pre-wrap leading-relaxed">
+            {citation.content}
+          </p>
         </div>
       )}
-
-      {expanded && (
-        <p className="mt-2 pl-7 text-xs text-slate-500 whitespace-pre-wrap leading-relaxed border-t border-slate-200 pt-2">
-          {citation.content}
-        </p>
-      )}
-    </button>
+    </div>
   );
 }

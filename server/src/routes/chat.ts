@@ -15,6 +15,8 @@
 import { Router, Request, Response } from "express";
 import { createChatStream, type ChatMessage } from "../services/aiProvider.js";
 import { buildRagContext, buildRagSystemPrompt, type RagChunk } from "../services/ragService.js";
+import { supabase } from "../lib/supabase.js";
+import { getDocumentById } from "../services/documentService.js";
 
 const router = Router();
 
@@ -55,6 +57,9 @@ router.post("/chat", async (req: Request, res: Response) => {
         if (ragContext.type === "rag" && ragContext.chunks.length > 0) {
           ragChunks = ragContext.chunks;
 
+          // 为每个 chunk 的来源文档生成签名 URL（1 小时有效），供前端跳转源文件
+          const fileUrlMap = await buildFileUrlMap(ragChunks);
+
           // 在流式 token 之前先发送引用来源事件，前端可立即渲染来源卡片
           sendEvent({
             type: "citations",
@@ -63,6 +68,10 @@ router.post("/chat", async (req: Request, res: Response) => {
               document_id: c.document_id,
               content: c.content.slice(0, 200),
               metadata: c.metadata,
+              // 从 metadata 中提取溯源字段，方便前端直接读取
+              document_name: (c.metadata?.document_name as string | undefined) ?? null,
+              pointer: (c.metadata?.pointer as string | undefined) ?? null,
+              file_url: fileUrlMap.get(c.document_id) ?? null,
             })),
           });
         }
@@ -147,3 +156,36 @@ router.post("/chat", async (req: Request, res: Response) => {
 });
 
 export default router;
+
+// ─── 辅助函数 ─────────────────────────────────────────────────────────
+
+/**
+ * 为 RAG chunks 涉及的文档批量生成 Supabase Storage 签名 URL（1 小时有效）。
+ * 同一文档只请求一次，返回 Map<document_id, signedUrl>。
+ * 失败时静默忽略，不影响对话流程。
+ */
+async function buildFileUrlMap(chunks: RagChunk[]): Promise<Map<string, string>> {
+  const urlMap = new Map<string, string>();
+  if (!supabase) return urlMap;
+
+  const uniqueDocIds = [...new Set(chunks.map((c) => c.document_id))];
+
+  await Promise.allSettled(
+    uniqueDocIds.map(async (docId) => {
+      try {
+        const doc = await getDocumentById(docId);
+        if (!doc?.storage_path) return;
+        const { data, error } = await supabase!.storage
+          .from("documents")
+          .createSignedUrl(doc.storage_path, 3600);
+        if (!error && data?.signedUrl) {
+          urlMap.set(docId, data.signedUrl);
+        }
+      } catch {
+        // 静默忽略，不阻断对话
+      }
+    }),
+  );
+
+  return urlMap;
+}
