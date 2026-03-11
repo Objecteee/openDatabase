@@ -286,8 +286,6 @@ router.get("/:id/parse", async (req: Request, res: Response) => {
   try {
     const doc = await getDocumentById(id);
     if (!doc) return res.status(404).json({ error: "文档不存在" });
-    if (["video", "audio"].includes(doc.type))
-      return res.status(400).json({ error: `类型 ${doc.type} 需通过专用转录接口处理` });
 
     await updateDocumentStatus(id, "processing");
     const { chunks } = await parseDocument(id, doc.storage_path, doc.type);

@@ -3,6 +3,8 @@
  * txt/md：智能切片 (DeepSeek) + 语义增强 (DeepSeek)
  * pdf：Mistral OCR → Markdown → 智能切片 (DeepSeek) + 语义增强 (DeepSeek)
  * 其他（docx/xlsx/pptx/csv/html/png/jpg 等）：Markitdown API → Markdown → 智能切片 + 语义增强
+ * video：方舟视频理解 → 结构化 Markdown（时间戳分段）→ 智能切片 + 语义增强
+ * audio：豆包语音识别极速版 → 带时间戳 Markdown → 智能切片 + 语义增强
  */
 
 import { supabase } from "../lib/supabase.js";
@@ -10,6 +12,8 @@ import { smartChunkWithDeepSeek } from "../parsers/smartChunkingParser.js";
 import { enrichChunks } from "./semanticEnrichmentService.js";
 import { parsePdfWithMistralOcr } from "../parsers/mistralOcrParser.js";
 import { convertToMarkdown, getMimeTypeByExt, shouldUseMarkitdown } from "../parsers/markitdownParser.js";
+import { parseVideoWithArk } from "../parsers/arkVideoParser.js";
+import { parseAudioWithDoubao, getAudioFormat } from "../parsers/arkAudioParser.js";
 
 export interface EnrichedChunk {
   content: string;
@@ -51,9 +55,43 @@ export async function parseDocument(documentId: string, storagePath: string, typ
 
       return parseMarkdownText(mdText, documentId, "md");
     }
+    case "video": {
+      // 视频理解需要公网可访问的 URL，生成 Supabase Storage 签名 URL（有效期 1 小时）
+      const { data: signedData, error: signError } = await supabase.storage
+        .from("documents")
+        .createSignedUrl(storagePath, 3600);
+      if (signError || !signedData?.signedUrl) {
+        throw new Error(`生成视频签名 URL 失败: ${signError?.message ?? "未知错误"}`);
+      }
+
+      console.log(`[parseDocument] 开始方舟视频理解，storagePath: ${storagePath}`);
+      const videoResult = await parseVideoWithArk(signedData.signedUrl);
+      console.log(`[parseDocument] 视频理解完成，Markdown 长度: ${videoResult.markdown.length}`);
+
+      if (!videoResult.markdown.trim()) throw new Error("视频理解结果为空");
+
+      return parseMarkdownText(videoResult.markdown, documentId, "md");
+    }
+    case "audio": {
+      // 音频识别：直接下载 Buffer 后 base64 传给豆包语音极速版
+      const fileName = storagePath.split("/").pop() ?? "audio.mp3";
+      const ext = fileName.split(".").pop() ?? "mp3";
+      const format = getAudioFormat(ext);
+
+      const arrayBuffer = await data.arrayBuffer();
+      const audioBuffer = Buffer.from(arrayBuffer);
+
+      console.log(`[parseDocument] 开始豆包语音识别，格式: ${format}，大小: ${(audioBuffer.length / 1024).toFixed(1)} KB`);
+      const audioResult = await parseAudioWithDoubao(audioBuffer, format);
+      console.log(`[parseDocument] 音频识别完成，时长: ${audioResult.durationMs}ms，Markdown 长度: ${audioResult.markdown.length}`);
+
+      if (!audioResult.markdown.trim()) throw new Error("音频识别结果为空");
+
+      return parseMarkdownText(audioResult.markdown, documentId, "md");
+    }
     default: {
       if (!shouldUseMarkitdown(type)) {
-        throw new Error(`不支持解析的类型: ${type}（视频/音频需单独处理）`);
+        throw new Error(`不支持解析的类型: ${type}`);
       }
 
       // 从 storagePath 推断文件名和扩展名
