@@ -19,7 +19,7 @@ export function createChatStream(messages, options = {}) {
             Authorization: `Bearer ${AI_API_KEY}`,
         },
         body: JSON.stringify({
-            model: options.model || "gemini-2.5-flash",
+            model: options.model || process.env.AI_MODEL || "deepseek-chat",
             messages,
             stream: true,
             max_tokens: options.maxTokens ?? 4096,

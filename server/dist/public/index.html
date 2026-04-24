@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>OpenDatabase</title>
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem("theme");
+          if (t !== "light" && t !== "dark") {
+            t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+          }
+          document.documentElement.dataset.theme = t;
+        } catch (e) {
+          document.documentElement.dataset.theme = "light";
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="/assets/index-BXjNuipi.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-C0BAcG04.css">
+  </head>
+  <body>
+    <div id="root">
+      <div style="display:flex;min-height:100vh;align-items:center;justify-content:center;background:#f8fafc;color:#64748b;font-size:14px">加载中…</div>
+    </div>
+  </body>
+</html>

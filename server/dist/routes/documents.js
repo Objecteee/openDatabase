@@ -7,13 +7,19 @@ import multer from "multer";
 import fs from "fs";
 import path from "path";
 import { createDocument, deleteDocument, findByHash, getDocumentById, updateDocumentStatus } from "../services/documentService.js";
+import { insertMultiVectorChunks, deleteChunksByDocumentId } from "../services/chunkService.js";
+import { parseDocument } from "../services/parseService.js";
 import { supabase } from "../lib/supabase.js";
 import { CHUNK_SIZE, SMALL_FILE_THRESHOLD } from "../constants/upload.js";
 const router = Router();
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 // 分片上传会话（内存存储，生产可换 Redis）
 const uploadSessions = new Map();
-const multerUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: SMALL_FILE_THRESHOLD } });
+const multerUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: SMALL_FILE_THRESHOLD },
+    defParamCharset: "utf8", // 正确解析中文等 UTF-8 文件名，避免 å½é³ 乱码
+});
 const tempDir = path.join(process.cwd(), "uploads", "temp");
 const ensureTempDir = (dir) => {
     if (!fs.existsSync(dir))
@@ -24,8 +30,11 @@ router.post("/check-upload", async (req, res) => {
     const { hash } = req.body;
     if (!hash || typeof hash !== "string")
         return res.status(400).json({ error: "hash 必填" });
+    const userId = req.user?.id;
+    if (!userId)
+        return res.status(401).json({ error: "未登录" });
     try {
-        const doc = await findByHash(hash);
+        const doc = await findByHash(hash, userId);
         if (doc)
             return res.json({ exists: true, id: doc.id, storage_path: doc.storage_path });
     }
@@ -34,20 +43,41 @@ router.post("/check-upload", async (req, res) => {
     }
     res.json({ exists: false });
 });
+/** 生成仅含 UUID+扩展名的 storage key，避免中文/Unicode 导致 Supabase Invalid key */
+const safeStoragePath = (originalName) => {
+    const raw = (originalName.split(".").pop() || "bin").toLowerCase();
+    const safeExt = raw.replace(/[^a-z0-9]/g, "") || "bin";
+    return `documents/${crypto.randomUUID()}.${safeExt}`;
+};
 // 小文件直传：POST /api/documents/upload (FormData, file < 5MB)
 router.post("/upload", multerUpload.single("file"), async (req, res) => {
     if (!req.file)
         return res.status(400).json({ error: "缺少文件" });
+    const userId = req.user?.id;
+    if (!userId)
+        return res.status(401).json({ error: "未登录" });
     const { hash } = req.body || {};
     const name = req.file.originalname;
     const ext = (name.split(".").pop() || "").toLowerCase();
-    const typeMap = { pdf: "pdf", txt: "txt", md: "md", docx: "docx", mp4: "video", mp3: "audio", wav: "audio" };
-    const type = typeMap[ext] || "unknown";
-    const storage_path = `documents/${crypto.randomUUID()}_${encodeURIComponent(name)}`;
+    const typeMap = {
+        pdf: "pdf", txt: "txt", md: "md",
+        docx: "docx", xlsx: "xlsx", xls: "xls", pptx: "pptx",
+        csv: "csv", json: "json", html: "html", xml: "xml",
+        jpg: "jpg", jpeg: "jpeg", png: "png",
+        mp4: "video", mp3: "audio", wav: "audio", m4a: "audio",
+    };
+    const type = typeMap[ext] || ext || "unknown";
+    const storage_path = safeStoragePath(name);
     if (!supabase)
         return res.status(500).json({ error: "Supabase 未配置" });
     try {
+        if (hash) {
+            const existing = await findByHash(hash, userId);
+            if (existing)
+                return res.json({ id: existing.id, status: "pending" });
+        }
         const docId = await createDocument({
+            user_id: userId,
             name,
             type,
             size: req.file.size,
@@ -80,9 +110,12 @@ router.post("/upload/init", async (req, res) => {
         return res.status(400).json({ error: "hash 必填且须为字符串" });
     if (hash.length !== 32 || !/^[a-f0-9]+$/i.test(hash))
         return res.status(400).json({ error: "hash 须为 32 位 MD5 字符串" });
+    const userId = req.user?.id;
+    if (!userId)
+        return res.status(401).json({ error: "未登录" });
     const totalChunks = Math.ceil(size / CHUNK_SIZE);
     const upload_id = crypto.randomUUID();
-    uploadSessions.set(upload_id, { name, size, hash, totalChunks, received: new Set() });
+    uploadSessions.set(upload_id, { userId, name, size, hash, totalChunks, received: new Set() });
     ensureTempDir(tempDir);
     const sessionDir = path.join(tempDir, upload_id);
     fs.mkdirSync(sessionDir, { recursive: true });
@@ -97,6 +130,8 @@ router.get("/upload/status/:upload_id", (req, res) => {
     const session = uploadSessions.get(upload_id);
     if (!session)
         return res.status(404).json({ error: "upload_id 无效或已过期" });
+    if (req.user?.id !== session.userId)
+        return res.status(404).json({ error: "upload_id 无效或已过期" });
     res.json({ received: Array.from(session.received).sort((a, b) => a - b), total: session.totalChunks });
 });
 // 分片上传：上传单个分片 PUT /api/documents/upload/chunk/:upload_id/:chunk_index
@@ -109,6 +144,8 @@ router.put("/upload/chunk/:upload_id/:chunk_index", express.raw({ type: "applica
         return res.status(400).json({ error: "chunk_index 无效" });
     const session = uploadSessions.get(upload_id);
     if (!session)
+        return res.status(404).json({ error: "upload_id 无效或已过期" });
+    if (req.user?.id !== session.userId)
         return res.status(404).json({ error: "upload_id 无效或已过期" });
     if (idx >= session.totalChunks)
         return res.status(400).json({ error: "chunk_index 超出范围" });
@@ -126,8 +163,13 @@ router.post("/upload/complete/:upload_id", async (req, res) => {
     if (!validateUploadId(upload_id))
         return res.status(400).json({ error: "upload_id 格式无效" });
     const { name: overrideName, type } = req.body || {};
+    const userId = req.user?.id;
+    if (!userId)
+        return res.status(401).json({ error: "未登录" });
     const session = uploadSessions.get(upload_id);
     if (!session)
+        return res.status(404).json({ error: "upload_id 无效或已过期" });
+    if (session.userId !== userId)
         return res.status(404).json({ error: "upload_id 无效或已过期" });
     if (session.received.size !== session.totalChunks) {
         return res.status(400).json({ error: "分片未传完", received: session.received.size, total: session.totalChunks });
@@ -135,9 +177,15 @@ router.post("/upload/complete/:upload_id", async (req, res) => {
     const sessionDir = path.join(tempDir, upload_id);
     const name = overrideName || session.name;
     const ext = (name.split(".").pop() || "").toLowerCase();
-    const typeMap = { pdf: "pdf", txt: "txt", md: "md", docx: "docx", mp4: "video", mp3: "audio", wav: "audio" };
-    const docType = type || typeMap[ext] || "unknown";
-    const storage_path = `documents/${crypto.randomUUID()}_${encodeURIComponent(name)}`;
+    const typeMap = {
+        pdf: "pdf", txt: "txt", md: "md",
+        docx: "docx", xlsx: "xlsx", xls: "xls", pptx: "pptx",
+        csv: "csv", json: "json", html: "html", xml: "xml",
+        jpg: "jpg", jpeg: "jpeg", png: "png",
+        mp4: "video", mp3: "audio", wav: "audio", m4a: "audio",
+    };
+    const docType = type || typeMap[ext] || ext || "unknown";
+    const storage_path = safeStoragePath(name);
     if (!supabase)
         return res.status(500).json({ error: "Supabase 未配置" });
     const cleanup = () => {
@@ -152,6 +200,11 @@ router.post("/upload/complete/:upload_id", async (req, res) => {
         uploadSessions.delete(upload_id);
     };
     try {
+        const existing = await findByHash(session.hash, userId);
+        if (existing) {
+            cleanup();
+            return res.json({ id: existing.id, status: "pending" });
+        }
         const chunks = [];
         for (let i = 0; i < session.totalChunks; i++) {
             const p = path.join(sessionDir, `${i}`);
@@ -159,6 +212,7 @@ router.post("/upload/complete/:upload_id", async (req, res) => {
         }
         const fullBuffer = Buffer.concat(chunks);
         const docId = await createDocument({
+            user_id: userId,
             name,
             type: docType,
             size: session.size,
@@ -186,9 +240,13 @@ router.post("/upload/complete/:upload_id", async (req, res) => {
 router.get("/", async (_req, res) => {
     if (!supabase)
         return res.status(500).json({ error: "Supabase 未配置" });
+    const userId = _req.user?.id;
+    if (!userId)
+        return res.status(401).json({ error: "未登录" });
     const { data, error } = await supabase
         .from("documents")
         .select("id, name, type, size, status, hash, created_at")
+        .eq("user_id", userId)
         .order("created_at", { ascending: false });
     if (error)
         return res.status(500).json({ error: error.message });
@@ -199,8 +257,11 @@ router.get("/:id/url", async (req, res) => {
     const { id } = req.params;
     const expiresIn = 3600; // 1 小时
     try {
+        const userId = req.user?.id;
+        if (!userId)
+            return res.status(401).json({ error: "未登录" });
         const doc = await getDocumentById(id);
-        if (!doc?.storage_path || !supabase)
+        if (!doc?.storage_path || !supabase || doc.user_id !== userId)
             return res.status(404).json({ error: "文档不存在" });
         const { data, error } = await supabase.storage.from("documents").createSignedUrl(doc.storage_path, expiresIn);
         if (error)
@@ -214,7 +275,12 @@ router.get("/:id/url", async (req, res) => {
 // 详情：GET /api/documents/:id
 router.get("/:id", async (req, res) => {
     try {
+        const userId = req.user?.id;
+        if (!userId)
+            return res.status(401).json({ error: "未登录" });
         const doc = await getDocumentById(req.params.id);
+        if (!doc || doc.user_id !== userId)
+            return res.status(404).json({ error: "文档不存在" });
         res.json(doc);
     }
     catch {
@@ -224,11 +290,97 @@ router.get("/:id", async (req, res) => {
 // 删除：DELETE /api/documents/:id
 router.delete("/:id", async (req, res) => {
     try {
+        const userId = req.user?.id;
+        if (!userId)
+            return res.status(401).json({ error: "未登录" });
+        const doc = await getDocumentById(req.params.id);
+        if (!doc || doc.user_id !== userId)
+            return res.status(404).json({ error: "文档不存在或删除失败" });
         await deleteDocument(req.params.id);
         res.json({ ok: true });
     }
     catch {
         res.status(404).json({ error: "文档不存在或删除失败" });
+    }
+});
+// 解析文档，返回待向量化的切片（供前端 embed 后提交）
+// GET /api/documents/:id/parse
+router.get("/:id/parse", async (req, res) => {
+    const { id } = req.params;
+    try {
+        const userId = req.user?.id;
+        if (!userId)
+            return res.status(401).json({ error: "未登录" });
+        const doc = await getDocumentById(id);
+        if (!doc || doc.user_id !== userId)
+            return res.status(404).json({ error: "文档不存在" });
+        await updateDocumentStatus(id, "processing");
+        const { chunks } = await parseDocument(id, doc.storage_path, doc.type);
+        res.json({ chunks, document_id: id, document_type: doc.type, document_name: doc.name });
+    }
+    catch (e) {
+        const msg = e instanceof Error ? e.message : "解析失败";
+        try {
+            await updateDocumentStatus(req.params.id, "failed", { error_message: msg });
+        }
+        catch {
+            /* ignore */
+        }
+        res.status(500).json({ error: msg });
+    }
+});
+// 提交向量化后的 chunks（支持单 ID 多向量：enriched_main + qa_hypothetical x2）
+// POST /api/documents/:id/chunks
+router.post("/:id/chunks", async (req, res) => {
+    const { id } = req.params;
+    const { chunks } = req.body;
+    if (!Array.isArray(chunks) || chunks.length === 0)
+        return res.status(400).json({ error: "chunks 必填且须为非空数组" });
+    const EMBEDDING_DIM = 384;
+    for (const c of chunks) {
+        if (!c.chunk_group_id || typeof c.chunk_group_id !== "string")
+            return res.status(400).json({ error: "chunk_group_id 必填" });
+        if (!Array.isArray(c.embeddings) || c.embeddings.length < 3)
+            return res.status(400).json({ error: "每逻辑切片需 3 个向量：enriched_main + 2 qa_hypothetical" });
+        const hasEnriched = c.embeddings.some((e) => e.type === "enriched_main");
+        const hydeCount = c.embeddings.filter((e) => e.type === "qa_hypothetical").length;
+        if (!hasEnriched || hydeCount < 2)
+            return res.status(400).json({ error: "embeddings 须含 1 个 enriched_main 和 2 个 qa_hypothetical" });
+        for (const e of c.embeddings) {
+            if (!Array.isArray(e.embedding) || e.embedding.length !== EMBEDDING_DIM)
+                return res.status(400).json({ error: `embedding 须为 ${EMBEDDING_DIM} 维向量` });
+        }
+    }
+    try {
+        const userId = req.user?.id;
+        if (!userId)
+            return res.status(401).json({ error: "未登录" });
+        const doc = await getDocumentById(id);
+        if (!doc || doc.user_id !== userId)
+            return res.status(404).json({ error: "文档不存在" });
+        await deleteChunksByDocumentId(id);
+        await insertMultiVectorChunks(chunks.map((c) => ({
+            user_id: userId,
+            document_id: id,
+            chunk_group_id: c.chunk_group_id,
+            content: String(c.content),
+            metadata: { ...(c.metadata ?? {}), document_type: doc.type },
+            chunk_index: Number(c.chunk_index),
+            embeddings: c.embeddings.map((e) => ({ type: e.type, embedding: e.embedding })),
+        })));
+        const totalRows = chunks.length * 3;
+        await updateDocumentStatus(id, "completed");
+        res.json({ ok: true, count: chunks.length, total_vectors: totalRows });
+    }
+    catch (e) {
+        const msg = e instanceof Error ? e.message : "写入失败";
+        try {
+            await updateDocumentStatus(id, "failed", { error_message: msg });
+        }
+        catch {
+            /* ignore */
+        }
+        res.status(500).json({ error: msg });
     }
 });
 export default router;

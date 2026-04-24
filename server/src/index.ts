@@ -7,6 +7,8 @@ import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import chatRouter from "./routes/chat.js";
 import documentsRouter from "./routes/documents.js";
 import conversationsRouter from "./routes/conversations.js";
@@ -14,6 +16,8 @@ import authRouter from "./routes/auth.js";
 import statsRouter from "./routes/stats.js";
 import { requireAuth } from "./middleware/authMiddleware.js";
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -32,6 +36,17 @@ app.use("/api", requireAuth, statsRouter);
 app.get("/health", (_req, res) => {
   res.json({ ok: true, service: "chat-api" });
 });
+
+if (process.env.NODE_ENV === "production") {
+  const publicDir = path.join(__dirname, "public");
+  app.use(express.static(publicDir));
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api") || req.path === "/health") {
+      return next();
+    }
+    return res.sendFile(path.join(publicDir, "index.html"));
+  });
+}
 
 /** 端口被占用时尝试备用端口 */
 function tryListen(port: number, maxAttempts = 5, isFallback = false): void {

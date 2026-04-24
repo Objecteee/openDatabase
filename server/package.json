@@ -5,7 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build:server": "tsc",
+    "build:client": "npm --prefix ../client run build",
+    "copy:client": "node ./scripts/copyClientBuild.mjs",
+    "build": "npm run build:client && npm run build:server && npm run copy:client",
     "start": "node dist/index.js"
   },
   "dependencies": {

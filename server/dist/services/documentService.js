@@ -26,17 +26,21 @@ export async function getDocumentById(id) {
         throw error;
     return data;
 }
-export async function findByHash(hash) {
+/** 按 hash 查找已存在文档（排除 failed），用于秒传 */
+export async function findByHash(hash, userId) {
     if (!supabase)
         throw new Error("Supabase 未配置");
-    const { data, error } = await supabase
+    let query = supabase
         .from("documents")
         .select("id, storage_path")
         .eq("hash", hash)
-        .eq("status", "completed")
+        .in("status", ["pending", "processing", "completed"])
         .limit(1)
-        .single();
-    if (error && error.code !== "PGRST116")
+        .maybeSingle();
+    if (userId)
+        query = query.eq("user_id", userId);
+    const { data, error } = await query;
+    if (error)
         throw error;
     return data;
 }
