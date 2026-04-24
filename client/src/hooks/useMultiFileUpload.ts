@@ -4,6 +4,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { performUpload, type UploadProgress } from "../lib/uploadCore.js";
+import { createUuid } from "../lib/uuid.js";
 
 export type UploadPhase = "queued" | "hashing" | "checking" | "uploading" | "done" | "error";
 
@@ -73,7 +74,7 @@ export function useMultiFileUpload(onItemDone?: (documentId?: string) => void) {
     const validFiles = arr.filter((f) => f.size > 0);
     if (validFiles.length === 0) return;
     const newItems: UploadItem[] = validFiles.map((file) => ({
-      id: crypto.randomUUID(),
+      id: createUuid(),
       file,
       phase: "queued" as const,
       progress: 0,

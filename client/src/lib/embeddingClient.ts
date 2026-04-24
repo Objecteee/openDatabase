@@ -7,6 +7,7 @@
  * 本模块负责聚合为整体进度并暴露给 UI。
  */
 
+import { createUuid } from "./uuid.js";
 export const EMBEDDING_DIM = 384;
 export type EmbeddingState = "idle" | "loading" | "ready" | "error";
 
@@ -169,7 +170,7 @@ export function getEmbeddingState() {
 }
 
 export function embed(text: string): Promise<number[]> {
-  const id = crypto.randomUUID();
+  const id = createUuid();
   getWorker().postMessage({ type: "embed", id, text });
   return new Promise((resolve, reject) => {
     const timer = makeTimeout(id, pendingEmbeds);
@@ -179,7 +180,7 @@ export function embed(text: string): Promise<number[]> {
 
 export function embedBatch(texts: string[]): Promise<number[][]> {
   if (texts.length === 0) return Promise.resolve([]);
-  const id = crypto.randomUUID();
+  const id = createUuid();
   getWorker().postMessage({ type: "embedBatch", id, texts });
   return new Promise((resolve, reject) => {
     const timer = makeTimeout(id, pendingBatches);

@@ -45,6 +45,14 @@ npm run build
 NODE_ENV=production npm start
 ```
 
+如果你是 HTTP（公网 IP + 端口，无 HTTPS），请在 `.env` 里显式加：
+
+```bash
+COOKIE_SECURE=false
+```
+
+否则浏览器不会在 HTTP 请求里携带 `refresh_token` cookie，登录后会出现刷新失败/掉登录。
+
 ### 3) systemd 服务重启（服务器）
 
 如果线上使用了 `deepcall.service`：

@@ -11,6 +11,7 @@ import remarkGfm from "remark-gfm";
 import { embed } from "../lib/embeddingClient.js";
 import { getEmbeddingState } from "../lib/embeddingClient.js";
 import { api } from "../lib/apiClient.js";
+import { createUuid } from "../lib/uuid.js";
 import { useAuthStore } from "../stores/authStore.js";
 import { useChatStore } from "../stores/chatStore.js";
 import { useTranslation } from "react-i18next";
@@ -213,10 +214,10 @@ export function ChatPage() {
     setInput("");
     setError(null);
 
-    const userMsg: Message = { id: crypto.randomUUID(), role: "user", content: text };
+    const userMsg: Message = { id: createUuid(), role: "user", content: text };
     useChatStore.setState((s) => ({ messages: [...s.messages, userMsg] }));
 
-    const assistantId = crypto.randomUUID();
+    const assistantId = createUuid();
     assistantIdRef.current = assistantId;
     const assistantMsg: Message = { id: assistantId, role: "assistant", content: "", streaming: true };
     useChatStore.setState((s) => ({ messages: [...s.messages, assistantMsg] }));

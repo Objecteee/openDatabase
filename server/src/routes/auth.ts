@@ -26,10 +26,17 @@ function getErrMessage(e: unknown): { message: string; code?: string; details?: 
 
 function refreshCookieOptions() {
   const isProd = process.env.NODE_ENV === "production";
+  const cookieSecureEnv = process.env.COOKIE_SECURE?.toLowerCase();
+  const secure =
+    cookieSecureEnv === "true"
+      ? true
+      : cookieSecureEnv === "false"
+        ? false
+        : isProd;
   return {
     httpOnly: true,
     sameSite: "lax" as const,
-    secure: isProd,
+    secure,
     path: "/api/auth",
   };
 }

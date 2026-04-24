@@ -5,6 +5,7 @@
 
 import { embedBatch } from "./embeddingClient.js";
 import { api } from "./apiClient.js";
+import { createUuid } from "./uuid.js";
 
 export interface ParseChunk {
   content: string;
@@ -63,7 +64,7 @@ export async function vectorizeDocument(documentId: string): Promise<VectorizeRe
     // 映射回 chunks：每 chunk 3 个 embedding
     const payload = chunks.map((c, i) => {
       const base = i * 3;
-      const chunkGroupId = crypto.randomUUID();
+      const chunkGroupId = createUuid();
       return {
         chunk_index: c.chunk_index,
         content: c.content,
